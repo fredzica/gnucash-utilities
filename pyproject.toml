@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "gnucash-reports"
+version = "0.1.0"
+description = "The description of the package"
+
+license = "MIT"
+
+authors = [
+    "Frederico Zica <fredzica@gmail.com>"
+]
+
+readme = 'README.md'  # Markdown files are supported
+
+repository = "https://github.com/fredzica/gnucash-reports"
+homepage = "https://github.com/fredzica/gnucash-reports"
+
+keywords = ['gnucash', 'reports']
+
+[tool.poetry.dependencies]
+python = "^3.8"  # Compatible python versions must be declared here
+matplotlib = "^3.1.1"
+numpy = "^1.17"
+
