@@ -1,2 +1,3 @@
-# gnucash-reports
-Custom reports that use data from gnucash's SQL database
+# gnucash-utilities
+Scripts and reports to enhance Gnucash use
+
