@@ -1,17 +1,36 @@
 import sys
+import os
 
 import csv
 from datetime import datetime
 
-f_path = sys.argv[1]
+folder_path = sys.argv[1]
 
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
-# TODO: processsar vários arquivos
 # TODO: adicionar data de liquidacao e data do pregao
 # TODO: adicionar mais prints, tambem adicionar warn quando houver venda de possíveis FIIs, pq o IR deles deve ser declarado separadamente
 # TODO: escrever saída em outro csv
-with open(f_path,  newline='') as csv_file:
+# TODO: para escrever a conta inteira do gnucash talvez faca mais sentido buscar no DB dele todas as possíveis contas e bater com as que estão aqui? isso permitiria fazer o controle melhor de IR quando for uma venda de FII
+
+def write_csv(stocks, taxes):
+    print(stocks)
+    print(taxes)
+
+'''
+    with open(f_path + '.formatted', 'w', newline='') as csv_write:
+
+        field_names = ['date', 'description', 'amount']
+        writer = csv.DictWriter(csv_write, fieldnames=field_names)
+        writer.writeheader()
+
+        for row in reader:
+            formatted =  datetime.strptime(row[0], '%d %b, %Y')
+            formatted_time = formatted.strftime('%d-%m-%Y')
+
+            writer.writerow({'date': formatted_time, 'description': row[1], 'amount': row[2]})
+'''
+def process_csv(csv_file):
     # skip first two lines
     next(csv_file)
     next(csv_file)
@@ -53,28 +72,24 @@ with open(f_path,  newline='') as csv_file:
     row = next(reader)
     liquido = row['D/C'].replace('D','').replace('C', '').replace('-', '')
     liquido = float(liquido)
+    tax_value = "{:.2f}".format(float(taxa_liquidacao) + float(taxa_b))
+    taxes.append({'tax': 'B3', 'value': tax_value})
+    taxes.append({'tax': 'IR B3', 'value': "{:.2f}".format(float(ir))})
 
-    taxes.append({'tax': 'B3', 'value': float(taxa_liquidacao) + float(taxa_b)})
-    taxes.append({'tax': 'IR B3', 'value': float(ir)})
+    write_csv(stocks, taxes)
 
     # TODO: check values
 
-    print(stocks)
-    print(taxes)
 
 
 
 
-'''
-    with open(f_path + '.formatted', 'w', newline='') as csv_write:
+for root, directories, files in os.walk(folder_path):
+   for f in files:
+      if '.csv' in f:
+        print("Iterating through file {}".format(f))
+        file_path = '{}/{}'.format(root, f)
 
-        field_names = ['date', 'description', 'amount']
-        writer = csv.DictWriter(csv_write, fieldnames=field_names)
-        writer.writeheader()
+        with open(file_path,  newline='') as csv_file:
+            process_csv(csv_file)
 
-        for row in reader:
-            formatted =  datetime.strptime(row[0], '%d %b, %Y')
-            formatted_time = formatted.strftime('%d-%m-%Y')
-
-            writer.writerow({'date': formatted_time, 'description': row[1], 'amount': row[2]})
-'''
