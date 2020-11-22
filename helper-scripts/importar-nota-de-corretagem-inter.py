@@ -9,30 +9,51 @@ folder_path = sys.argv[1]
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
 # TODO: adicionar mais prints, tambem adicionar warn quando houver venda de possíveis FIIs, pq o IR deles deve ser declarado separadamente
-# TODO: escrever saída em outro csv
 # TODO: para escrever a conta inteira do gnucash talvez faca mais sentido buscar no DB dele todas as possíveis contas e bater com as que estão aqui? isso permitiria fazer o controle melhor de IR quando for uma venda de FII
 
-def write_csv(stocks, taxes):
+
+def write_stocks_csv(stocks):
     print(stocks)
-    print(taxes)
 
-'''
-    with open(f_path + '.formatted', 'w', newline='') as csv_write:
+    with open(folder_path + '/stocks.csv'.format(), 'w', newline='') as csv_write:
 
-        field_names = ['date', 'description', 'amount']
+        field_names = ['stock', 'amount', 'price', 'date', 'description']
         writer = csv.DictWriter(csv_write, fieldnames=field_names)
         writer.writeheader()
 
-        for row in reader:
-            formatted =  datetime.strptime(row[0], '%d %b, %Y')
-            formatted_time = formatted.strftime('%d-%m-%Y')
+        for stock in stocks:
+            writer.writerow({
+                'stock': stock['stock'],
+                'amount': stock['amount'],
+                'price': stock['price'],
+                'date': stock['date'],
+                'description': stock['description'],
+            })
 
-            writer.writerow({'date': formatted_time, 'description': row[1], 'amount': row[2]})
-'''
+def write_taxes_csv(taxes):
+    print(taxes)
+
+    with open(folder_path + '/taxes.csv'.format(), 'w', newline='') as csv_write:
+
+        field_names = ['tax', 'value', 'date', 'description']
+        writer = csv.DictWriter(csv_write, fieldnames=field_names)
+        writer.writeheader()
+
+        for tax in taxes:
+            writer.writerow({
+                'tax': tax['tax'],
+                'value':  tax['value'],
+                'date':  tax['date'],
+                'description':  tax['description'],
+            })
+
+
+
 def extract_date_from_liq(liq_string):
     splitted = liq_string.split()
 
     return splitted[2].replace(':', '')
+
 
 def add_liq_date_to_lists(liq_date, stocks, taxes):
     for stock in stocks:
@@ -41,11 +62,13 @@ def add_liq_date_to_lists(liq_date, stocks, taxes):
     for tax in taxes:
         tax['date'] = liq_date
 
+
 def extract_negotiation_date(file_path):
     splitted_path = file_path.split('/')
     file_name = splitted_path[len(splitted_path) - 1]
 
     return file_name.split('_')[2]
+
 
 def process_csv(csv_file):
     # skip first two lines
@@ -100,13 +123,24 @@ def process_csv(csv_file):
     data_liquido = extract_date_from_liq(row['COMPRA/VENDA (R$)'])
 
     tax_value = "{:.2f}".format(float(taxa_liquidacao) + float(taxa_b))
-    taxes.append({'tax': 'B3', 'value': tax_value})
-    taxes.append({'tax': 'IR B3', 'value': "{:.2f}".format(float(ir))})
+    taxes.append({
+        'tax': 'B3',
+        'value': tax_value,
+        'description': 'Pregão do dia {}'.format(negotiation_date)
+    })
+
+    ir_float = float(ir)
+    if ir_float:
+        taxes.append({
+            'tax': 'IR B3',
+            'value': "{:.2f}".format(ir_float),
+            'description': 'Pregão do dia {}'.format(negotiation_date)
+        })
 
     add_liq_date_to_lists(data_liquido, stocks, taxes)
 
-    write_csv(stocks, taxes)
 
+    return stocks, taxes
     # TODO: check values
 
 
@@ -114,11 +148,18 @@ def process_csv(csv_file):
 
 
 for root, directories, files in os.walk(folder_path):
-   for f in files:
-      if '.csv' in f:
-        print("Iterating through file {}".format(f))
-        file_path = '{}/{}'.format(root, f)
+    stocks = []
+    taxes = []
+    for f in files:
+        if '_NotaCor_'in f and '.csv' in f:
+            print("Iterating through file {}".format(f))
+            file_path = '{}/{}'.format(root, f)
 
-        with open(file_path,  newline='') as csv_file:
-            process_csv(csv_file)
+            with open(file_path,  newline='') as csv_file:
+                (stockss, taxess) = process_csv(csv_file)
+                stocks += stockss
+                taxes += taxess
+
+    write_stocks_csv(stocks)
+    write_taxes_csv(taxes)
 
