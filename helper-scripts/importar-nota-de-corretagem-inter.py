@@ -2,9 +2,12 @@ import sys
 import os
 
 import csv
+from decimal import *
 from datetime import datetime
+from piecash import open_book, ledger, Transaction, Split, GnucashException
 
 folder_path = sys.argv[1]
+gnucash_db_path = sys.argv[2]
 
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
@@ -15,37 +18,43 @@ folder_path = sys.argv[1]
 def write_stocks_csv(stocks):
     print(stocks)
 
-    with open(folder_path + '/stocks.csv'.format(), 'w', newline='') as csv_write:
-
-        field_names = ['stock', 'amount', 'price', 'date', 'description']
-        writer = csv.DictWriter(csv_write, fieldnames=field_names)
-        writer.writeheader()
-
+    with open_book(gnucash_db_path, readonly=False) as book:
         for stock in stocks:
-            writer.writerow({
-                'stock': stock['stock'],
-                'amount': stock['amount'],
-                'price': stock['price'],
-                'date': stock['date'],
-                'description': stock['description'],
-            })
+            stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
+            print(stock_commodity)
+
+            stock_account = book.accounts(commodity=stock_commodity)
+            print(stock_account)
+
+            bank_account = book.accounts(name='Conta no Inter')
+            print(bank_account)
+
+            price = Decimal(stock['price'])
+            amount = Decimal(stock['amount'])
+            value =  price * amount
+
+            date = datetime.strptime(stock['date'], "%d/%m/%Y")
+
+            t1 = Transaction(currency=bank_account.commodity,
+                description=stock['description'],
+                post_date=date.date(),
+                enter_date=datetime.now(),
+                splits=[
+                    Split(value=-value, account=bank_account),
+                    Split(value=value, quantity=stock['amount'], account=stock_account),
+                ]
+            )
+
+            print(ledger(t1))
+            book.save()
+
+
+
+
+
 
 def write_taxes_csv(taxes):
     print(taxes)
-
-    with open(folder_path + '/taxes.csv'.format(), 'w', newline='') as csv_write:
-
-        field_names = ['tax', 'value', 'date', 'description']
-        writer = csv.DictWriter(csv_write, fieldnames=field_names)
-        writer.writeheader()
-
-        for tax in taxes:
-            writer.writerow({
-                'tax': tax['tax'],
-                'value':  tax['value'],
-                'date':  tax['date'],
-                'description':  tax['description'],
-            })
 
 
 
