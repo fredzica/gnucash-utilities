@@ -16,22 +16,17 @@ gnucash_db_path = sys.argv[2]
 
 
 def write_to_gnucash(brokerage_statements):
-    print(brokerage_statements)
-
     #TODO: check why transaction with IR B3 is diverging
     #TODO: unite all values of "conta no inter" in a single split
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no Inter')
-        print(bank_account)
 
         for statement in brokerage_statements:
             splits = []
             for stock in statement['stocks']:
                 stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
-                print(stock_commodity)
 
                 stock_account = book.accounts(commodity=stock_commodity)
-                print(stock_account)
 
                 price = Decimal(stock['price'])
                 amount = Decimal(stock['amount'])
@@ -42,7 +37,6 @@ def write_to_gnucash(brokerage_statements):
 
             for tax in statement['taxes']:
                 tax_account = book.accounts(name=tax['tax'])
-                print(tax_account)
 
                 value = Decimal(tax['value'])
                 splits.append(Split(value=-value, account=bank_account))
@@ -58,19 +52,11 @@ def write_to_gnucash(brokerage_statements):
             book.save()
 
 
-
-
-
-
-def write_taxes_csv(taxes):
-    print(taxes)
-
-
-
 def extract_date_from_liq(liq_string):
     splitted = liq_string.split()
 
     return splitted[2].replace(':', '')
+
 
 def extract_negotiation_date(file_path):
     splitted_path = file_path.split('/')
@@ -88,7 +74,6 @@ def process_csv(csv_file):
     brokerage_statement = {}
     stocks = []
     taxes = []
-    negotiation_date = extract_negotiation_date(csv_file.name)
 
     reader = csv.DictReader(csv_file, delimiter = ';', quotechar='"')
     current_stock = None
@@ -115,35 +100,36 @@ def process_csv(csv_file):
             break;
     row = next(reader)
     taxa_liquidacao = row['D/C'].replace('D','')
-    taxa_liquidacao = float(taxa_liquidacao)
+    taxa_liquidacao = Decimal(taxa_liquidacao)
     next(reader)
     next(reader)
     row = next(reader)
     taxa_b = row['D/C'].replace('D','').replace('-', '')
-    taxa_b = float(taxa_b)
+    taxa_b = Decimal(taxa_b)
     next(reader)
     row = next(reader)
     ir = row['PREÇO DE LIQUIDAÇÃO(R$)'].replace('D','')
-    ir = float(ir)
+    ir = Decimal(ir)
     row = next(reader)
     liquido = row['D/C'].replace('D','').replace('C', '').replace('-', '')
-    liquido = float(liquido)
+    liquido = Decimal(liquido)
 
-    data_liquido = extract_date_from_liq(row['COMPRA/VENDA (R$)'])
 
-    tax_value = "{:.2f}".format(float(taxa_liquidacao) + float(taxa_b))
+    tax_value = "{:.2f}".format(Decimal(taxa_liquidacao) + Decimal(taxa_b))
     taxes.append({
         'tax': 'B3',
         'value': tax_value,
     })
 
-    ir_float = float(ir)
+    ir_float = Decimal(ir)
     if ir_float:
         taxes.append({
             'tax': 'IR B3',
             'value': "{:.2f}".format(ir_float)
         })
 
+    negotiation_date = extract_negotiation_date(csv_file.name)
+    data_liquido = extract_date_from_liq(row['COMPRA/VENDA (R$)'])
     brokerage_statement['stocks'] = stocks
     brokerage_statement['taxes'] = taxes
     brokerage_statement['date'] = data_liquido
