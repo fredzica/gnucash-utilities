@@ -17,7 +17,6 @@ gnucash_db_path = sys.argv[2]
 
 
 def write_to_gnucash(brokerage_statements):
-    #TODO: check why transaction with IR B3 is diverging
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no Inter')
 
@@ -36,7 +35,6 @@ def write_to_gnucash(brokerage_statements):
 
                 splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
                 bank_account_value -= value
-                print(bank_account_value)
 
             for tax in statement['taxes']:
                 tax_account = book.accounts(name=tax['tax'])
@@ -46,8 +44,7 @@ def write_to_gnucash(brokerage_statements):
                 splits.append(Split(value=value, account=tax_account))
 
                 bank_account_value -= value
-                print(bank_account_value)
-            
+
             splits.append(Split(value=bank_account_value, account=bank_account))
 
             date = datetime.strptime(statement['date'], "%d/%m/%Y")
@@ -129,11 +126,13 @@ def process_csv(csv_file):
         'value': tax_value,
     })
 
+    ''' o valor do IR nao esta sendo debitado da conta...
     if ir:
         taxes.append({
             'tax': 'IR B3',
             'value': "{:.2f}".format(ir)
         })
+    '''
 
     negotiation_date = extract_negotiation_date(csv_file.name)
     data_liquido = extract_date_from_liq(row['COMPRA/VENDA (R$)'])
