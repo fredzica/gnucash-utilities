@@ -13,16 +13,18 @@ gnucash_db_path = sys.argv[2]
 
 # TODO: adicionar mais prints, tambem adicionar warn quando houver venda de possíveis FIIs, pq o IR deles deve ser declarado separadamente
 # TODO: para escrever a conta inteira do gnucash talvez faca mais sentido buscar no DB dele todas as possíveis contas e bater com as que estão aqui? isso permitiria fazer o controle melhor de IR quando for uma venda de FII
+# TODO: soltar warning se vendas ultrapassarem 20000!
 
 
 def write_to_gnucash(brokerage_statements):
     #TODO: check why transaction with IR B3 is diverging
-    #TODO: unite all values of "conta no inter" in a single split
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no Inter')
 
         for statement in brokerage_statements:
+            bank_account_value = 0
             splits = []
+
             for stock in statement['stocks']:
                 stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
 
@@ -32,15 +34,21 @@ def write_to_gnucash(brokerage_statements):
                 amount = Decimal(stock['amount'])
                 value =  price * amount
 
-                splits.append(Split(value=-value, account=bank_account))
                 splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
+                bank_account_value -= value
+                print(bank_account_value)
 
             for tax in statement['taxes']:
                 tax_account = book.accounts(name=tax['tax'])
 
+
                 value = Decimal(tax['value'])
-                splits.append(Split(value=-value, account=bank_account))
                 splits.append(Split(value=value, account=tax_account))
+
+                bank_account_value -= value
+                print(bank_account_value)
+            
+            splits.append(Split(value=bank_account_value, account=bank_account))
 
             date = datetime.strptime(statement['date'], "%d/%m/%Y")
             t1 = Transaction(currency=bank_account.commodity,
@@ -121,11 +129,10 @@ def process_csv(csv_file):
         'value': tax_value,
     })
 
-    ir_float = Decimal(ir)
-    if ir_float:
+    if ir:
         taxes.append({
             'tax': 'IR B3',
-            'value': "{:.2f}".format(ir_float)
+            'value': "{:.2f}".format(ir)
         })
 
     negotiation_date = extract_negotiation_date(csv_file.name)
