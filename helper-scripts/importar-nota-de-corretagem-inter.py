@@ -15,36 +15,45 @@ gnucash_db_path = sys.argv[2]
 # TODO: para escrever a conta inteira do gnucash talvez faca mais sentido buscar no DB dele todas as possíveis contas e bater com as que estão aqui? isso permitiria fazer o controle melhor de IR quando for uma venda de FII
 
 
-def write_stocks_csv(stocks):
-    print(stocks)
+def write_to_gnucash(brokerage_statements):
+    print(brokerage_statements)
 
+    #TODO: check why transaction with IR B3 is diverging
+    #TODO: unite all values of "conta no inter" in a single split
     with open_book(gnucash_db_path, readonly=False) as book:
-        for stock in stocks:
-            stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
-            print(stock_commodity)
+        bank_account = book.accounts(name='Conta no Inter')
+        print(bank_account)
 
-            stock_account = book.accounts(commodity=stock_commodity)
-            print(stock_account)
+        for statement in brokerage_statements:
+            splits = []
+            for stock in statement['stocks']:
+                stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
+                print(stock_commodity)
 
-            bank_account = book.accounts(name='Conta no Inter')
-            print(bank_account)
+                stock_account = book.accounts(commodity=stock_commodity)
+                print(stock_account)
 
-            price = Decimal(stock['price'])
-            amount = Decimal(stock['amount'])
-            value =  price * amount
+                price = Decimal(stock['price'])
+                amount = Decimal(stock['amount'])
+                value =  price * amount
 
-            date = datetime.strptime(stock['date'], "%d/%m/%Y")
+                splits.append(Split(value=-value, account=bank_account))
+                splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
 
+            for tax in statement['taxes']:
+                tax_account = book.accounts(name=tax['tax'])
+                print(tax_account)
+
+                value = Decimal(tax['value'])
+                splits.append(Split(value=-value, account=bank_account))
+                splits.append(Split(value=value, account=tax_account))
+
+            date = datetime.strptime(statement['date'], "%d/%m/%Y")
             t1 = Transaction(currency=bank_account.commodity,
-                description=stock['description'],
+                description=statement['description'],
                 post_date=date.date(),
-                enter_date=datetime.now(),
-                splits=[
-                    Split(value=-value, account=bank_account),
-                    Split(value=value, quantity=stock['amount'], account=stock_account),
-                ]
+                splits=splits
             )
-
             print(ledger(t1))
             book.save()
 
@@ -63,15 +72,6 @@ def extract_date_from_liq(liq_string):
 
     return splitted[2].replace(':', '')
 
-
-def add_liq_date_to_lists(liq_date, stocks, taxes):
-    for stock in stocks:
-        stock['date'] = liq_date
-
-    for tax in taxes:
-        tax['date'] = liq_date
-
-
 def extract_negotiation_date(file_path):
     splitted_path = file_path.split('/')
     file_name = splitted_path[len(splitted_path) - 1]
@@ -85,6 +85,7 @@ def process_csv(csv_file):
     next(csv_file)
 
     # read stocks, amounts and prices
+    brokerage_statement = {}
     stocks = []
     taxes = []
     negotiation_date = extract_negotiation_date(csv_file.name)
@@ -107,7 +108,6 @@ def process_csv(csv_file):
                 'stock': current_stock,
                 'amount': amount,
                 'price': price,
-                'description': 'Pregão do dia {}'.format(negotiation_date)
             })
             current_stock = None
 
@@ -135,40 +135,31 @@ def process_csv(csv_file):
     taxes.append({
         'tax': 'B3',
         'value': tax_value,
-        'description': 'Pregão do dia {}'.format(negotiation_date)
     })
 
     ir_float = float(ir)
     if ir_float:
         taxes.append({
             'tax': 'IR B3',
-            'value': "{:.2f}".format(ir_float),
-            'description': 'Pregão do dia {}'.format(negotiation_date)
+            'value': "{:.2f}".format(ir_float)
         })
 
-    add_liq_date_to_lists(data_liquido, stocks, taxes)
-
-
-    return stocks, taxes
-    # TODO: check values
-
-
-
+    brokerage_statement['stocks'] = stocks
+    brokerage_statement['taxes'] = taxes
+    brokerage_statement['date'] = data_liquido
+    brokerage_statement['description'] = 'Pregão do dia {}'.format(negotiation_date)
+    return brokerage_statement
 
 
 for root, directories, files in os.walk(folder_path):
-    stocks = []
-    taxes = []
+    brokerage_statements = []
     for f in files:
         if '_NotaCor_'in f and '.csv' in f:
             print("Iterating through file {}".format(f))
             file_path = '{}/{}'.format(root, f)
 
             with open(file_path,  newline='') as csv_file:
-                (stockss, taxess) = process_csv(csv_file)
-                stocks += stockss
-                taxes += taxess
-
-    write_stocks_csv(stocks)
-    write_taxes_csv(taxes)
+                statement = process_csv(csv_file)
+                brokerage_statements.append(statement)
+    write_to_gnucash(brokerage_statements)
 
