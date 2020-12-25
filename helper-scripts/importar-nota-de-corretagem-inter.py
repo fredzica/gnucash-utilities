@@ -11,14 +11,14 @@ gnucash_db_path = sys.argv[2]
 
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
-# TODO: adicionar mais prints, tambem adicionar warn quando houver venda de possíveis FIIs, pq o IR deles deve ser declarado separadamente
-# TODO: para escrever a conta inteira do gnucash talvez faca mais sentido buscar no DB dele todas as possíveis contas e bater com as que estão aqui? isso permitiria fazer o controle melhor de IR quando for uma venda de FII
-# TODO: soltar warning se vendas ultrapassarem 20000!
+# TODO: adicionar warn quando houver venda de FIIs, pq o IR deles deve ser declarado separadamente
 
 
 def write_to_gnucash(brokerage_statements):
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no Inter')
+        sold_value = Decimal(0)
+        bought_value = Decimal(0)
 
         for statement in brokerage_statements:
             bank_account_value = 0
@@ -32,6 +32,12 @@ def write_to_gnucash(brokerage_statements):
                 price = Decimal(stock['price'])
                 amount = Decimal(stock['amount'])
                 value =  price * amount
+
+                if value > 0:
+                    bought_value += value
+                else:
+                    sold_value += -value
+
 
                 splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
                 bank_account_value -= value
@@ -56,6 +62,12 @@ def write_to_gnucash(brokerage_statements):
             print(ledger(t1))
             book.save()
 
+
+        print('sold value: {:.2f}'.format(sold_value))
+        print('bought value: {:.2f}'.format(bought_value))
+
+        if sold_value >= 20000:
+            print('*************** You sold more than 20000! Check if you need to pay taxes this month')
 
 def extract_date_from_liq(liq_string):
     splitted = liq_string.split()
