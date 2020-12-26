@@ -2,6 +2,7 @@ import sys
 import os
 
 import csv
+import re
 from decimal import *
 from datetime import datetime
 from piecash import open_book, ledger, Transaction, Split, GnucashException
@@ -10,9 +11,6 @@ folder_path = sys.argv[1]
 gnucash_db_path = sys.argv[2]
 
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
-
-# TODO: adicionar warn quando houver venda de FIIs, pq o IR deles deve ser declarado separadamente
-
 
 def write_to_gnucash(brokerage_statements):
     with open_book(gnucash_db_path, readonly=False) as book:
@@ -25,7 +23,10 @@ def write_to_gnucash(brokerage_statements):
             splits = []
 
             for stock in statement['stocks']:
-                stock_commodity = book.commodities(mnemonic=stock['stock'].upper() + '.SA')
+                stock_name = stock['stock'].upper()
+                stock_name = re.sub(r'F$', '', stock_name) # handling fractional
+
+                stock_commodity = book.commodities(mnemonic=stock_name + '.SA')
 
                 stock_account = book.accounts(commodity=stock_commodity)
 
@@ -37,6 +38,9 @@ def write_to_gnucash(brokerage_statements):
                     bought_value += value
                 else:
                     sold_value += -value
+
+                    if 'FIIs' in stock_account.fullname:
+                        print('*************** You have sold the FII {}! Check if you need to pay taxes this month'.format(stock_account.fullname))
 
 
                 splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
@@ -51,6 +55,7 @@ def write_to_gnucash(brokerage_statements):
 
                 bank_account_value -= value
 
+            # adds the bank account split only at the end so the value is grouped
             splits.append(Split(value=bank_account_value, account=bank_account))
 
             date = datetime.strptime(statement['date'], "%d/%m/%Y")
@@ -130,7 +135,6 @@ def process_csv(csv_file):
     row = next(reader)
     liquido = row['D/C'].replace('D','').replace('C', '').replace('-', '')
     liquido = Decimal(liquido)
-
 
     tax_value = "{:.2f}".format(Decimal(taxa_liquidacao) + Decimal(taxa_b))
     taxes.append({
