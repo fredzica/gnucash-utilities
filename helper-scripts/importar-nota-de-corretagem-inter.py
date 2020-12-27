@@ -19,6 +19,8 @@ def write_to_gnucash(brokerage_statements):
         bought_value = Decimal(0)
 
         for statement in brokerage_statements:
+            print("Importing {}".format(statement['description']))
+
             bank_account_value = 0
             splits = []
 
@@ -26,6 +28,7 @@ def write_to_gnucash(brokerage_statements):
                 stock_name = stock['stock'].upper()
                 stock_name = re.sub(r'F$', '', stock_name) # handling fractional
 
+                # TODO: create commodity and account if they don't yet exist
                 stock_commodity = book.commodities(mnemonic=stock_name + '.SA')
 
                 stock_account = book.accounts(commodity=stock_commodity)
@@ -49,7 +52,6 @@ def write_to_gnucash(brokerage_statements):
             for tax in statement['taxes']:
                 tax_account = book.accounts(name=tax['tax'])
 
-
                 value = Decimal(tax['value'])
                 splits.append(Split(value=value, account=tax_account))
 
@@ -65,7 +67,8 @@ def write_to_gnucash(brokerage_statements):
                 splits=splits
             )
             print(ledger(t1))
-            book.save()
+
+        book.save()
 
 
         print('sold value: {:.2f}'.format(sold_value))
