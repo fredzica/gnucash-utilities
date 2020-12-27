@@ -16,7 +16,7 @@ def write_to_gnucash(stocks, dividends, transfers):
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no TD Ameritrade')
 
-        print("Importing {} stock, {} dividend and {} transfers transactions".format(len(stocks), len(dividends), len(transfers)))
+        print("Importing {} stock, {} dividend and {} transfer transactions".format(len(stocks), len(dividends), len(transfers)))
 
         for stock in stocks:
             symbol = stock['symbol'].upper()
@@ -52,6 +52,7 @@ def write_to_gnucash(stocks, dividends, transfers):
             quantity = Decimal(stock['quantity'])
             if value < 0:
                 quantity = -quantity
+                print("******* You have sold the stock {}. Check if you should pay taxes this month!".format(symbol))
 
             date = datetime.strptime(stock['date'], "%m/%d/%Y")
             description = stock['description']
@@ -69,8 +70,14 @@ def write_to_gnucash(stocks, dividends, transfers):
         book.save()
         
         # TODO: import dividends and transfers
-        # TODO: print sold and bought values, dividends values, transfer values
+        sold_bought_balance = sum(stock['value'] for stock in stocks)
+        print("Bought - sold stocks: {}".format(sold_bought_balance))
 
+        dividends_after_tax = sum(dividend['value'] for dividend in dividends)
+        print("Dividends after taxes: {}".format(dividends_after_tax))
+
+        transferred = sum(transfer['value'] for transfer in transfers)
+        print("Transferred amount: {}".format(transferred))
 
 def process_csv(csv_file):
 
