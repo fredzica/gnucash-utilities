@@ -87,17 +87,49 @@ def write_to_gnucash(stocks, dividends, transfers):
             )
             print(ledger(transfer_transaction))
 
+        for dividend in dividends:
+            symbol = dividend['symbol'].upper()
+            if ' ' in symbol:
+                symbol = symbol.replace(' ', '-')
+
+            try:
+                dividend_account = book.accounts(name=symbol, type='INCOME')
+            except KeyError:
+                parent_account = book.accounts(name='US Dividends')
+
+                dividend_account = Account(name=symbol,
+                    type="INCOME",
+                    parent=parent_account,
+                    commodity=parent_account.commodity,
+                    placeholder=False,
+                )
+                book.flush()
+
+            value = Decimal(dividend['value'])
+            date = datetime.strptime(dividend['date'], "%m/%d/%Y")
+            description = dividend['description']
+
+            dividend_transaction = Transaction(currency=brokerage_account.commodity,
+                description=description,
+                post_date=date.date(),
+                splits=[
+                    Split(value=-value, account=dividend_account),
+                    Split(value=value, account=brokerage_account)
+                ]
+            )
+            print(ledger(dividend_transaction))
+
+
         book.save()
         
-        # TODO: import dividends and transfers
         sold_bought_balance = sum(stock['value'] for stock in stocks)
-        print("Bought - sold stocks: {}".format(sold_bought_balance))
+        print("Bought - sold stocks: ${}".format(sold_bought_balance))
 
         dividends_after_tax = sum(dividend['value'] for dividend in dividends)
-        print("Dividends after taxes: {}".format(dividends_after_tax))
+        print("Dividends after taxes: ${}".format(dividends_after_tax))
 
         transferred = sum(transfer['value'] for transfer in transfers)
-        print("Transferred amount: {}".format(transferred))
+        print("Transferred amount: ${}".format(transferred))
 
 def process_csv(csv_file):
 
