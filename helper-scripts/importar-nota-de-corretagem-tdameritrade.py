@@ -14,7 +14,7 @@ gnucash_db_path = sys.argv[2]
 
 def write_to_gnucash(stocks, dividends, transfers):
     with open_book(gnucash_db_path, readonly=False) as book:
-        bank_account = book.accounts(name='Conta no TD Ameritrade')
+        brokerage_account = book.accounts(name='Conta no TD Ameritrade')
 
         print("Importing {} stock, {} dividend and {} transfer transactions".format(len(stocks), len(dividends), len(transfers)))
 
@@ -57,15 +57,35 @@ def write_to_gnucash(stocks, dividends, transfers):
             date = datetime.strptime(stock['date'], "%m/%d/%Y")
             description = stock['description']
 
-            t1 = Transaction(currency=bank_account.commodity,
+            stock_transaction = Transaction(currency=brokerage_account.commodity,
                 description=description,
                 post_date=date.date(),
                 splits=[
                     Split(value=value, quantity=quantity, account=stock_account),
-                    Split(value=-value, account=bank_account)
+                    Split(value=-value, account=brokerage_account)
                 ]
             )
-            print(ledger(t1))
+            print(ledger(stock_transaction))
+
+        bank_account = book.accounts(name='Conta no Inter')
+        for transfer in transfers:
+            value = transfer['value']
+            date = datetime.strptime(transfer['date'], "%m/%d/%Y")
+            description = transfer['description']
+
+            print("Enter the USDBRL conversion rate for the transfer made on {} of ${}".format(date, value))
+            usdbrl = Decimal(input())
+            brl = value * usdbrl
+
+            transfer_transaction = Transaction(currency=bank_account.commodity,
+                description=description,
+                post_date=date.date(),
+                splits=[
+                    Split(value=brl, quantity=value, account=brokerage_account),
+                    Split(value=-brl, account=bank_account)
+                ]
+            )
+            print(ledger(transfer_transaction))
 
         book.save()
         
