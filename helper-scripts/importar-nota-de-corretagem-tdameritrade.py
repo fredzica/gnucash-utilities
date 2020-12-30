@@ -69,23 +69,30 @@ def write_to_gnucash(stocks, dividends, transfers):
 
         bank_account = book.accounts(name='Conta no Inter')
         for transfer in transfers:
-            value = transfer['value']
+            value = Decimal(transfer['value'])
             date = datetime.strptime(transfer['date'], "%m/%d/%Y")
             description = transfer['description']
 
             print("Enter the USDBRL conversion rate for the transfer made on {} of ${}".format(date, value))
             usdbrl = Decimal(input())
             brl = value * usdbrl
+            brl = brl.quantize(Decimal('.01'), rounding=ROUND_DOWN) # round correctly to monetary value after multiplication
 
+            print("Enter the IOF value for the transfer made on {} of ${}".format(date, value))
+            iof = Decimal(input())
+
+            iof_account = book.accounts(name='IOF de remessas internacionais')
             transfer_transaction = Transaction(currency=bank_account.commodity,
                 description=description,
                 post_date=date.date(),
                 splits=[
                     Split(value=brl, quantity=value, account=brokerage_account),
-                    Split(value=-brl, account=bank_account)
+                    Split(value=iof, account=iof_account),
+                    Split(value=-(brl + iof), account=bank_account)
                 ]
             )
             print(ledger(transfer_transaction))
+
 
         for dividend in dividends:
             symbol = dividend['symbol'].upper()
