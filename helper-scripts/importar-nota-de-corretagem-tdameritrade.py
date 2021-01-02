@@ -169,7 +169,7 @@ def process_csv(csv_file):
                 'quantity': row['QUANTITY'],
                 'value': -amount,
             })
-        elif any(x in description.lower() for x in ['dividend', 'w-8']):
+        elif any(x in description.lower() for x in ['dividend', 'w-8', 'short term capital gains']):
             dividends.append({
                 'date': date,
                 'description': description,
