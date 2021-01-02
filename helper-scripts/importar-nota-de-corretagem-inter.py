@@ -5,7 +5,7 @@ import csv
 import re
 from decimal import *
 from datetime import datetime
-from piecash import open_book, ledger, Transaction, Split, GnucashException
+from piecash import open_book, ledger, Account, Commodity, Transaction, Split, GnucashException
 
 folder_path = sys.argv[1]
 gnucash_db_path = sys.argv[2]
@@ -22,16 +22,44 @@ def write_to_gnucash(brokerage_statements):
             print("Importing {}".format(statement['description']))
 
             bank_account_value = 0
-            splits = []
+            splits_data = []
 
             for stock in statement['stocks']:
                 stock_name = stock['stock'].upper()
                 stock_name = re.sub(r'F$', '', stock_name) # handling fractional
+                stock_name_with_suffix = stock_name + '.SA'
 
-                # TODO: create commodity and account if they don't yet exist
-                stock_commodity = book.commodities(mnemonic=stock_name + '.SA')
+                try:
+                    stock_commodity = book.commodities(mnemonic=stock_name_with_suffix)
+                except KeyError:
+                    stock_commodity = Commodity(mnemonic=stock_name_with_suffix,
+                        fullname=stock_name_with_suffix,
+                        fraction=1,
+                        namespace='BVMF',
+                        quote_flag=1,
+                        quote_source="yahoo_json",
+                    )
+                    book.flush()
 
-                stock_account = book.accounts(commodity=stock_commodity)
+                try:
+                    stock_account = book.accounts(commodity=stock_commodity)
+                except KeyError:
+                    print("Is {} a stock (1) or a FII (2)?".format(stock_name))
+                    number = int(input())
+                    if number == 1:
+                        parent_account = book.accounts(name='Ações')
+                    elif number == 2:
+                        parent_account = book.accounts(name='FIIs')
+                    else:
+                        raise Exception("Invalid input. Should be 1 or 2")
+
+                    stock_account = Account(name=stock_name,
+                        type="STOCK",
+                        parent=parent_account,
+                        commodity=stock_commodity,
+                        placeholder=False,
+                    )
+                    book.flush()
 
                 price = Decimal(stock['price'])
                 amount = Decimal(stock['amount'])
@@ -46,19 +74,21 @@ def write_to_gnucash(brokerage_statements):
                         print('*************** You have sold the FII {}! Check if you need to pay taxes this month'.format(stock_account.fullname))
 
 
-                splits.append(Split(value=value, quantity=stock['amount'], account=stock_account))
+                splits_data.append({'value': value, 'quantity': stock['amount'], 'account':stock_account})
                 bank_account_value -= value
 
             for tax in statement['taxes']:
                 tax_account = book.accounts(name=tax['tax'])
 
                 value = Decimal(tax['value'])
-                splits.append(Split(value=value, account=tax_account))
+                splits_data.append({'value': value, 'account': tax_account})
 
                 bank_account_value -= value
 
             # adds the bank account split only at the end so the value is grouped
-            splits.append(Split(value=bank_account_value, account=bank_account))
+            splits_data.append({'value': bank_account_value, 'account': bank_account})
+
+            splits = list(map(lambda split_data: Split(**split_data), splits_data))
 
             date = datetime.strptime(statement['date'], "%d/%m/%Y")
             t1 = Transaction(currency=bank_account.commodity,
