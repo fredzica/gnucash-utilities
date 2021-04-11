@@ -49,11 +49,15 @@ def collect_bens_direitos_brasil(book, date_filter):
 
 def retrieve_usdbrl_quote(aux_yaml_path, day):
     with open(aux_yaml_path, 'r') as yaml_file:
-        yaml_content = yaml.full_load(yaml_file)
-        print(yaml_content)
+
+        # yaml with Decimal objects can only be loaded with unsafe_load
+        yaml_content = yaml.unsafe_load(yaml_file)
+
+        if yaml_content is None or not 'usdbrl' in yaml_content or yaml_content['usdbrl'] is None:
+            print('yaml is currently empty')
+            yaml_content = {'usdbrl': {}}
 
         usdbrl_quotes = yaml_content['usdbrl']
-        print(usdbrl_quotes)
         
         try:
             day_quote = usdbrl_quotes[day]
@@ -63,9 +67,12 @@ def retrieve_usdbrl_quote(aux_yaml_path, day):
             quote = Decimal(input())
 
             usdbrl_quotes[day] = quote
-            yaml_content.items()['usdbrl'] = usdbrl_quotes
-            yaml.dump(yaml_content, yaml_file)
+            yaml_content['usdbrl'].update(usdbrl_quotes)
+ 
+            with open(aux_yaml_path, 'w') as yaml_file_write:
+                yaml.dump(yaml_content, yaml_file_write)
 
+            return quote
 
 
 def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
@@ -88,7 +95,11 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                 value += Decimal(split.value)
 
                 if split.value > 0:
-                    day_usdbrl = retrieve_usdbrl_quote(aux_yaml_path, '11-04-2021')
+                    format = "%d-%m-%Y"
+                    day = split.transaction.post_date.strftime(format)
+
+                    day_usdbrl = retrieve_usdbrl_quote(aux_yaml_path, day)
+
                     dollar_value_purchases += Decimal(split.value)
                     real_value_purchases += (day_usdbrl * Decimal(split.value))
                     quantity_purchases += Decimal(split.quantity)
@@ -106,7 +117,8 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     'real_price_avg': real_price_avg,
                     'dollar_value_purchases': dollar_value_purchases,
                     'real_value_purchases': real_value_purchases,
-                    'quantity_purchases': quantity_purchases
+                    'quantity_purchases': quantity_purchases,
+                    'usdbrl_quote': day_usdbrl
             })
 
     return stocks
