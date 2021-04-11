@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "ir"
+version = "0.1.0"
+description = ""
+authors = ["Frederico Zica <fredzica@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+PyYAML = "^5.4.1"
+piecash = "^1.1.7"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -3,6 +3,9 @@ import os
 import csv
 import re
 import pprint
+
+import yaml
+
 from decimal import *
 from datetime import date
 from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
@@ -44,7 +47,28 @@ def collect_bens_direitos_brasil(book, date_filter):
     return acoes
 
 
-def collect_bens_direitos_stocks(book, date_filter):
+def retrieve_usdbrl_quote(aux_yaml_path, day):
+    with open(aux_yaml_path, 'r') as yaml_file:
+        yaml_content = yaml.full_load(yaml_file)
+        print(yaml_content)
+
+        usdbrl_quotes = yaml_content['usdbrl']
+        print(usdbrl_quotes)
+        
+        try:
+            day_quote = usdbrl_quotes[day]
+            return Decimal(day_quote)
+        except KeyError:
+            print("What is the USDBRL quote for {}?".format(day))
+            quote = Decimal(input())
+
+            usdbrl_quotes[day] = quote
+            yaml_content.items()['usdbrl'] = usdbrl_quotes
+            yaml.dump(yaml_content, yaml_file)
+
+
+
+def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
     stocks_account = book.accounts(name='Ações no exterior')
     children = stocks_account.children
 
@@ -64,7 +88,7 @@ def collect_bens_direitos_stocks(book, date_filter):
                 value += Decimal(split.value)
 
                 if split.value > 0:
-                    day_usdbrl = Decimal(5)
+                    day_usdbrl = retrieve_usdbrl_quote(aux_yaml_path, '11-04-2021')
                     dollar_value_purchases += Decimal(split.value)
                     real_value_purchases += (day_usdbrl * Decimal(split.value))
                     quantity_purchases += Decimal(split.quantity)
@@ -93,11 +117,12 @@ def main():
     pp = pprint.PrettyPrinter(indent=2)
 
     gnucash_db_path = sys.argv[1]
-    year_filter = sys.argv[2]
+    aux_yaml_path = sys.argv[2]
+    year_filter = sys.argv[3]
 
     is_debug = False
-    if len(sys.argv) > 3:
-        is_debug = bool(sys.argv[3])
+    if len(sys.argv) > 4:
+        is_debug = bool(sys.argv[4])
 
     maximum_date_filter = date(int(year_filter), 12, 31)
 
@@ -112,7 +137,7 @@ def main():
             if is_debug:
                 pp.pprint(bem_direito)
 
-        stocks = collect_bens_direitos_stocks(book, maximum_date_filter)
+        stocks = collect_bens_direitos_stocks(book, aux_yaml_path, maximum_date_filter)
         for stock in stocks:
             print('ticker: {}, valor_dollar: {}, valor_real: {}, quantidade: {}'.format(stock['name'], round(stock['dollar_value'], 2), round(stock['real_value'], 2), round(stock['quantity'], 2)))
             
