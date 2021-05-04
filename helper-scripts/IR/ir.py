@@ -24,7 +24,7 @@ def collect_bens_direitos_brasil(book, date_filter):
         price_avg = Decimal(0)
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
-        for split in acao_account.splits:
+        for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
                 value += Decimal(split.value)
@@ -90,7 +90,7 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
         dollar_value_purchases = Decimal(0)
         real_value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
-        for split in stock_account.splits:
+        for split in sorted(stock_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
                 value += Decimal(split.value)
