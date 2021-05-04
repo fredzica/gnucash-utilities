@@ -29,6 +29,7 @@ def collect_bens_direitos_brasil(book, date_filter):
                 quantity += Decimal(split.quantity)
                 value += Decimal(split.value)
 
+                # TODO: tratar caso em que a posicao foi zerada?
                 if split.value > 0:
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
@@ -94,6 +95,7 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                 quantity += Decimal(split.quantity)
                 value += Decimal(split.value)
 
+                # TODO: tratar caso em que a posicao foi zerada?
                 if split.value > 0:
                     format = "%d-%m-%Y"
                     day = split.transaction.post_date.strftime(format)
@@ -127,6 +129,11 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
 
 def main():
     pp = pprint.PrettyPrinter(indent=2)
+
+    if len(sys.argv) < 4:
+        print('Wrong number of arguments!')
+        print('Usage: ir.py gnucash_db_path aux_yaml_path year_filter is_debug (optional, default false)')
+        return
 
     gnucash_db_path = sys.argv[1]
     aux_yaml_path = sys.argv[2]
