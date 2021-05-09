@@ -195,9 +195,9 @@ def main():
         print("************* Bens e direitos *************")
         bens_direitos = collect_bens_direitos_brasil(book, maximum_date_filter)
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
-            print(bem_direito['name'])
-            
             metadata = bem_direito['metadata']
+
+            print(bem_direito['name'])
             print("Código: {}\nCNPJ: {}\nDiscriminação: {} {} - CORRETORA INTER DTVM\nSituação R$: {}\n***".format(metadata['codigo_bem_direito'], metadata['cnpj'], round(bem_direito['quantity'], 0), bem_direito['name'], round(bem_direito['value'], 2)))
             
             if is_debug:
@@ -205,8 +205,14 @@ def main():
 
         stocks = collect_bens_direitos_stocks(book, aux_yaml_path, maximum_date_filter)
         for stock in sorted(stocks, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
-            print('ticker: {}, valor_dollar: {}, valor_real: {}, quantidade: {}'.format(stock['name'], round(stock['dollar_value'], 2), round(stock['real_value'], 2), round(stock['quantity'], 2)))
-            
+            metadata = stock['metadata']
+
+            types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
+            type_description = types[metadata['type']]
+
+            print(stock['name'])
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora TD Ameritrade.".format(round(stock['quantity'], 0), type_description, stock['name'], stock['name'], round(stock['dollar_value'], 2)))
+
             if is_debug:
                 pp.pprint(stock)
         print("**************************")
