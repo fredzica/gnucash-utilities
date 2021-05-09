@@ -27,17 +27,18 @@ def collect_bens_direitos_brasil(book, date_filter):
         for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
+                transaction_date = split.transaction.post_date
+
+                # avg should go back to zero if everything was sold at some point
+                if quantity == 0:
+                    price_avg = Decimal(0)
+                    value_purchases = Decimal(0)
+                    quantity_purchases = Decimal(0)
 
                 if split.value > 0:
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
-
-                    # avg should go back to zero if everything was sold at some point
-                    if quantity == 0:
-                        price_avg = Decimal(0)
-                        value_purchases = Decimal(0)
-                        quantity_purchases = Decimal(0)
 
         if quantity > 0:
             acoes.append({
@@ -46,7 +47,8 @@ def collect_bens_direitos_brasil(book, date_filter):
                     'value': price_avg * quantity,
                     'price_avg': price_avg,
                     'value_purchases': value_purchases,
-                    'quantity_purchases': quantity_purchases
+                    'quantity_purchases': quantity_purchases,
+                    'last_transaction_date': transaction_date
             })
 
         elif quantity < 0:
@@ -100,6 +102,15 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
         for split in sorted(stock_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
+                transaction_date = split.transaction.post_date
+
+                # avg should go back to zero if everything was sold at some point
+                if quantity == 0:
+                    dollar_price_avg = Decimal(0)
+                    real_price_avg = Decimal(0)
+                    dollar_value_purchases = Decimal(0)
+                    real_value_purchases = Decimal(0)
+                    quantity_purchases = Decimal(0)
 
                 if split.value > 0:
                     format = "%d-%m-%Y"
@@ -113,14 +124,6 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     dollar_price_avg = dollar_value_purchases/quantity_purchases
                     real_price_avg = real_value_purchases/quantity_purchases
 
-                    # avg should go back to zero if everything was sold at some point
-                    if quantity == 0:
-                        dollar_price_avg = Decimal(0)
-                        real_price_avg = Decimal(0)
-                        dollar_value_purchases = Decimal(0)
-                        real_value_purchases = Decimal(0)
-                        quantity_purchases = Decimal(0)
-
         if quantity > 0:
             stocks.append({
                     'name': stock_account.name,
@@ -132,7 +135,8 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     'dollar_value_purchases': dollar_value_purchases,
                     'real_value_purchases': real_value_purchases,
                     'quantity_purchases': quantity_purchases,
-                    'usdbrl_quote': day_usdbrl
+                    'last_usdbrl_quote': day_usdbrl,
+                    'last_transaction_date': transaction_date
             })
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
