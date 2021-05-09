@@ -1,21 +1,19 @@
 usdbrl:
   01-10-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.6441'
   03-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
-  07-01-2021: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.3079'
   08-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.3698'
   09-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.3024'
   14-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.2984'
   15-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.2728'
   16-09-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.2532'
   18-11-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.2932'
   24-11-2020: !!python/object/apply:decimal.Decimal
-  - '1'
+  - '5.4037'
