@@ -21,6 +21,12 @@ def extract_metadata(account):
     if metadata is None or not 'type' in metadata:
         raise Exception("The type field not found for {}".format(account.name))
 
+    if metadata['type'] not in ['etf','acao', 'fii', 'us stock', 'us etf', 'reit']:
+        raise Exception("The type for {} is not valid".format(account.name))
+
+    ir_code_dict = {'etf': 74, 'us etf': 74, 'fii': 73, 'acao': 31, 'us stock': 31, 'reit': 31} 
+    metadata['codigo_bem_direito'] = ir_code_dict[metadata['type']]
+
     return metadata
 
 
@@ -188,14 +194,18 @@ def main():
 
         print("************* Bens e direitos *************")
         bens_direitos = collect_bens_direitos_brasil(book, maximum_date_filter)
-        for bem_direito in sorted(bens_direitos, key=lambda x: x['name']):
-            print('ticker: {}, valor: {}, quantidade: {}'.format(bem_direito['name'], round(bem_direito['value'], 2), round(bem_direito['quantity'], 2)))
+        for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
+            print(bem_direito['name'])
+            #print('ticker: {}, valor: {}, quantidade: {}'.format(bem_direito['name'], round(bem_direito['value'], 2), round(bem_direito['quantity'], 2)))
+            
+            metadata = bem_direito['metadata']
+            print("Código: {}\nCNPJ: {}\nDiscriminação: {} {} - CORRETORA INTER DTVM\nSituação R$: {}\n***".format(metadata['codigo_bem_direito'], metadata['cnpj'], round(bem_direito['quantity'], 2), bem_direito['name'], round(bem_direito['value'], 2)))
             
             if is_debug:
                 pp.pprint(bem_direito)
 
         stocks = collect_bens_direitos_stocks(book, aux_yaml_path, maximum_date_filter)
-        for stock in sorted(stocks, key=lambda x: x['name']):
+        for stock in sorted(stocks, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
             print('ticker: {}, valor_dollar: {}, valor_real: {}, quantidade: {}'.format(stock['name'], round(stock['dollar_value'], 2), round(stock['real_value'], 2), round(stock['quantity'], 2)))
             
             if is_debug:
