@@ -164,14 +164,14 @@ def main():
 
         print("************* Bens e direitos *************")
         bens_direitos = collect_bens_direitos_brasil(book, maximum_date_filter)
-        for bem_direito in bens_direitos:
+        for bem_direito in sorted(bens_direitos, key=lambda x: x['name']):
             print('ticker: {}, valor: {}, quantidade: {}'.format(bem_direito['name'], round(bem_direito['value'], 2), round(bem_direito['quantity'], 2)))
             
             if is_debug:
                 pp.pprint(bem_direito)
 
         stocks = collect_bens_direitos_stocks(book, aux_yaml_path, maximum_date_filter)
-        for stock in stocks:
+        for stock in sorted(stocks, key=lambda x: x['name']):
             print('ticker: {}, valor_dollar: {}, valor_real: {}, quantidade: {}'.format(stock['name'], round(stock['dollar_value'], 2), round(stock['real_value'], 2), round(stock['quantity'], 2)))
             
             if is_debug:
