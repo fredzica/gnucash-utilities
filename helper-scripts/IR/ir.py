@@ -196,10 +196,9 @@ def main():
         bens_direitos = collect_bens_direitos_brasil(book, maximum_date_filter)
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
             print(bem_direito['name'])
-            #print('ticker: {}, valor: {}, quantidade: {}'.format(bem_direito['name'], round(bem_direito['value'], 2), round(bem_direito['quantity'], 2)))
             
             metadata = bem_direito['metadata']
-            print("Código: {}\nCNPJ: {}\nDiscriminação: {} {} - CORRETORA INTER DTVM\nSituação R$: {}\n***".format(metadata['codigo_bem_direito'], metadata['cnpj'], round(bem_direito['quantity'], 2), bem_direito['name'], round(bem_direito['value'], 2)))
+            print("Código: {}\nCNPJ: {}\nDiscriminação: {} {} - CORRETORA INTER DTVM\nSituação R$: {}\n***".format(metadata['codigo_bem_direito'], metadata['cnpj'], round(bem_direito['quantity'], 0), bem_direito['name'], round(bem_direito['value'], 2)))
             
             if is_debug:
                 pp.pprint(bem_direito)
