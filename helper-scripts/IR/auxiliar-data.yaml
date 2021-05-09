@@ -3,6 +3,8 @@ usdbrl:
   - '5.6441'
   03-09-2020: !!python/object/apply:decimal.Decimal
   - '5.3079'
+  07-01-2021: !!python/object/apply:decimal.Decimal
+  - '5.3433'
   08-09-2020: !!python/object/apply:decimal.Decimal
   - '5.3698'
   09-09-2020: !!python/object/apply:decimal.Decimal

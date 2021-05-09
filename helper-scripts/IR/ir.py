@@ -5,10 +5,23 @@ import re
 import pprint
 
 import yaml
+import json
 
 from decimal import *
 from datetime import date
 from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
+
+
+def extract_metadata(account):
+    try:
+        metadata = json.loads(account.description)
+    except:
+        raise Exception("Metadata JSON could not be read for {}".format(account.name))
+
+    if metadata is None or not 'type' in metadata:
+        raise Exception("The type field not found for {}".format(account.name))
+
+    return metadata
 
 
 def collect_bens_direitos_brasil(book, date_filter):
@@ -18,6 +31,7 @@ def collect_bens_direitos_brasil(book, date_filter):
 
     acoes = []
     for acao_account in children:
+
         quantity = Decimal(0)
         value = Decimal(0)
 
@@ -41,6 +55,8 @@ def collect_bens_direitos_brasil(book, date_filter):
                     price_avg = value_purchases/quantity_purchases
 
         if quantity > 0:
+            metadata = extract_metadata(acao_account)
+
             acoes.append({
                     'name': acao_account.name,
                     'quantity': quantity,
@@ -48,7 +64,8 @@ def collect_bens_direitos_brasil(book, date_filter):
                     'price_avg': price_avg,
                     'value_purchases': value_purchases,
                     'quantity_purchases': quantity_purchases,
-                    'last_transaction_date': transaction_date
+                    'last_transaction_date': transaction_date,
+                    'metadata': metadata
             })
 
         elif quantity < 0:
@@ -125,6 +142,8 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     real_price_avg = real_value_purchases/quantity_purchases
 
         if quantity > 0:
+            metadata = extract_metadata(stock_account)
+
             stocks.append({
                     'name': stock_account.name,
                     'quantity': quantity,
@@ -136,7 +155,8 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     'real_value_purchases': real_value_purchases,
                     'quantity_purchases': quantity_purchases,
                     'last_usdbrl_quote': day_usdbrl,
-                    'last_transaction_date': transaction_date
+                    'last_transaction_date': transaction_date,
+                    'metadata': metadata
             })
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
