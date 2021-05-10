@@ -198,7 +198,11 @@ def main():
             metadata = bem_direito['metadata']
 
             print(bem_direito['name'])
-            print("Código: {}\nCNPJ: {}\nDiscriminação: {} {} - CORRETORA INTER DTVM\nSituação R$: {}\n***".format(metadata['codigo_bem_direito'], metadata['cnpj'], round(bem_direito['quantity'], 0), bem_direito['name'], round(bem_direito['value'], 2)))
+            print("Código:", metadata['codigo_bem_direito'])
+            print("CNPJ:", metadata['cnpj'])
+            print("Discriminação: {} {} - CORRETORA INTER DTVM".format(round(bem_direito['quantity'], 0), bem_direito['name']))
+            print("Situação R$:", round(bem_direito['value'], 2))
+            print("***")
             
             if is_debug:
                 pp.pprint(bem_direito)
