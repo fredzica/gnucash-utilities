@@ -215,7 +215,11 @@ def main():
             type_description = types[metadata['type']]
 
             print(stock['name'])
-            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora TD Ameritrade.".format(round(stock['quantity'], 0), type_description, stock['name'], stock['name'], round(stock['dollar_value'], 2)))
+            print("Código:", metadata['codigo_bem_direito'])
+            print("Localização: EUA")
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora TD Ameritrade.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
+            print("Situação R$:", round(stock['real_value'], 2))
+            print("***")
 
             if is_debug:
                 pp.pprint(stock)
