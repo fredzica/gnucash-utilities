@@ -24,7 +24,7 @@ def extract_metadata(account):
     if metadata['type'] not in ['etf','acao', 'fii', 'us stock', 'us etf', 'reit']:
         raise Exception("The type for {} is not valid".format(account.name))
 
-    ir_code_dict = {'etf': 74, 'us etf': 74, 'fii': 73, 'acao': 31, 'us stock': 31, 'reit': 31} 
+    ir_code_dict = {'etf': 74, 'us etf': 74, 'fii': 73, 'acao': 31, 'us stock': 31, 'reit': 31}
     metadata['codigo_bem_direito'] = ir_code_dict[metadata['type']]
 
     return metadata
@@ -170,6 +170,75 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
     return stocks
 
 
+def collect_aggregated_profits_data(book, date_filter):
+    acoes_account = book.accounts(name='Ações')
+
+    aggregated_profits = Decimal(0)
+    aggregated_loss = Decimal(0)
+    dedo_duro = Decimal(0)
+    all_sells = Decimal(0)
+    sellings = []
+    for acao_account in acoes_account.children:
+        '''
+        go on finding the average price
+        if less than 20k was sold during the month that the transaction is in and if it's a profit
+        add the profit to the aggregated value 
+        and subtract all exchange and fingerpointing (dedo-duro) costs from it
+        dedo-duro can be calculated since it's a known percentage
+        the exchange-related costs should be extracted proportionally to the total of the correspoding transaction?
+
+        log warning if the monthly selling exceeds 20k
+        '''
+
+        quantity = Decimal(0)
+        value = Decimal(0)
+
+        price_avg = Decimal(0)
+        value_purchases = Decimal(0)
+        quantity_purchases = Decimal(0)
+        for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
+            if split.transaction.post_date <= date_filter:
+                quantity += Decimal(split.quantity)
+                transaction_date = split.transaction.post_date
+
+
+                if split.value > 0:
+                    value_purchases += Decimal(split.value)
+                    quantity_purchases += Decimal(split.quantity)
+                    price_avg = value_purchases/quantity_purchases
+                # TODO: do the calculation below only for transactions in the filtered year
+                elif split.value < 0:
+                    all_sells += -split.value
+                    sold_price = split.value/split.quantity
+                    is_profit = sold_price > price_avg
+                    positive_quantity = -split.quantity
+                    profit = sold_price * positive_quantity - price_avg * positive_quantity
+                    if is_profit:
+                        aggregated_profits += profit
+                    else:
+                        aggregated_loss += profit
+                        
+
+
+                    sellings.append({
+                        'name': acao_account.name, 
+                        'date': split.transaction.post_date, 
+                        'sold_price': sold_price, 
+                        'quantity': split.quantity,
+                        'value': split.value,
+                        'price_avg': price_avg, 
+                        'is_profit': is_profit, 
+                        'profit': profit if is_profit else None
+                    })
+
+                # avg should go back to zero if everything was sold at some point
+                if quantity == 0:
+                    price_avg = Decimal(0)
+                    value_purchases = Decimal(0)
+                    quantity_purchases = Decimal(0)
+
+    return (aggregated_profits, dedo_duro, {"total_sold_value": all_sells, 'all_sellings': sellings, 'aggregated_loss': aggregated_loss})
+
 
 def main():
     pp = pprint.PrettyPrinter(indent=2)
@@ -224,6 +293,16 @@ def main():
             if is_debug:
                 pp.pprint(stock)
         print("**************************")
+        print()
+        print()
 
+        print("************* RV Agregado *************")
+        print("A ser declarado em Rendimentos Isentos e Não tributáveis (?)")
+        (aggregated_profits, dedo_duro, debug_info) = collect_aggregated_profits_data(book, maximum_date_filter)
+        print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(aggregated_profits, 2))
+        print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(dedo_duro, 2))
+        if is_debug:
+            pp.pprint(debug_info)
+        print("**************************")
 
 main()
