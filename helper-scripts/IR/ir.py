@@ -228,7 +228,7 @@ def collect_aggregated_profits_data(book, date_filter):
                         'value': split.value,
                         'price_avg': price_avg, 
                         'is_profit': is_profit, 
-                        'profit': profit if is_profit else None
+                        'profit': profit
                     })
 
                 # avg should go back to zero if everything was sold at some point
