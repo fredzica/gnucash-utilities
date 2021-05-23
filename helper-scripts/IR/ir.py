@@ -170,14 +170,14 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
     return stocks
 
 
-def collect_aggregated_profits_data(book, date_filter):
+def collect_aggregated_profits_data(book, date_filter, minimum_date):
     acoes_account = book.accounts(name='Ações')
 
     aggregated_profits = Decimal(0)
     aggregated_loss = Decimal(0)
     dedo_duro = Decimal(0)
     all_sells = Decimal(0)
-    sellings = []
+    sellings = {}
     for acao_account in acoes_account.children:
         '''
         go on finding the average price
@@ -201,13 +201,12 @@ def collect_aggregated_profits_data(book, date_filter):
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
 
-
                 if split.value > 0:
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
                 # TODO: do the calculation below only for transactions in the filtered year
-                elif split.value < 0:
+                elif split.value < 0 and split.transaction.post_date >= minimum_date:
                     all_sells += -split.value
                     sold_price = split.value/split.quantity
                     is_profit = sold_price > price_avg
@@ -217,12 +216,11 @@ def collect_aggregated_profits_data(book, date_filter):
                         aggregated_profits += profit
                     else:
                         aggregated_loss += profit
-                        
 
-
-                    sellings.append({
+                    format = "%Y-%m-%d"
+                    date_str = split.transaction.post_date.strftime(format)
+                    sellings.setdefault(date_str, []).append({
                         'name': acao_account.name, 
-                        'date': split.transaction.post_date, 
                         'sold_price': sold_price, 
                         'quantity': split.quantity,
                         'value': split.value,
@@ -257,6 +255,7 @@ def main():
         is_debug = bool(sys.argv[4])
 
     maximum_date_filter = date(int(year_filter), 12, 31)
+    minimum_date_filter = date(int(year_filter), 1, 1)
 
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
@@ -296,9 +295,9 @@ def main():
         print()
         print()
 
-        print("************* RV Agregado *************")
+        print("************* RV Agregado (exclui ETFs e FIIs) *************")
         print("A ser declarado em Rendimentos Isentos e Não tributáveis (?)")
-        (aggregated_profits, dedo_duro, debug_info) = collect_aggregated_profits_data(book, maximum_date_filter)
+        (aggregated_profits, dedo_duro, debug_info) = collect_aggregated_profits_data(book, maximum_date_filter, minimum_date_filter)
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(aggregated_profits, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(dedo_duro, 2))
         if is_debug:
