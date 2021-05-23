@@ -21,7 +21,7 @@ def extract_metadata(account):
     if metadata is None or not 'type' in metadata:
         raise Exception("The type field not found for {}".format(account.name))
 
-    if metadata['type'] not in ['etf','acao', 'fii', 'us stock', 'us etf', 'reit']:
+    if metadata['type'] not in ['etf', 'acao', 'fii', 'us stock', 'us etf', 'reit']:
         raise Exception("The type for {} is not valid".format(account.name))
 
     ir_code_dict = {'etf': 74, 'us etf': 74, 'fii': 73, 'acao': 31, 'us stock': 31, 'reit': 31}
@@ -178,7 +178,8 @@ def collect_aggregated_profits_data(book, date_filter, minimum_date):
     dedo_duro = Decimal(0)
     all_sells = Decimal(0)
     sellings = {}
-    for acao_account in acoes_account.children:
+    only_acoes = filter(lambda a: extract_metadata(a)['type'] == 'acao', acoes_account.children)
+    for acao_account in only_acoes:
         '''
         go on finding the average price
         if less than 20k was sold during the month that the transaction is in and if it's a profit
@@ -205,7 +206,6 @@ def collect_aggregated_profits_data(book, date_filter, minimum_date):
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
-                # TODO: do the calculation below only for transactions in the filtered year
                 elif split.value < 0 and split.transaction.post_date >= minimum_date:
                     all_sells += -split.value
                     sold_price = split.value/split.quantity
