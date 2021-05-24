@@ -175,7 +175,6 @@ def collect_aggregated_profits_data(book, date_filter, minimum_date):
 
     aggregated_profits = Decimal(0)
     aggregated_loss = Decimal(0)
-    dedo_duro = Decimal(0)
     all_sells = Decimal(0)
     sellings = {}
     only_acoes = filter(lambda a: extract_metadata(a)['type'] == 'acao', acoes_account.children)
@@ -235,6 +234,8 @@ def collect_aggregated_profits_data(book, date_filter, minimum_date):
                     value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
 
+    dedo_duro = all_sells * Decimal(0.00005)
+    aggregated_profits -= dedo_duro
     return (aggregated_profits, dedo_duro, {"total_sold_value": all_sells, 'all_sellings': sellings, 'aggregated_loss': aggregated_loss})
 
 
