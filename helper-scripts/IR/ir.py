@@ -305,15 +305,39 @@ def main():
         print()
 
         sales_info = extract_sales_info(all_sales)
+        if is_debug:
+            pp.pprint(sales_info)
+            pp.pprint(all_sales)
+
         print("************* RV Agregado (exclui ETFs e FIIs) *************")
         print("A ser declarado em Rendimentos Isentos e Não tributáveis (?)")
         acoes_aggregated_profit = sales_info['aggregated']['acoes']['aggregated_profits']
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
-        if is_debug:
-            pp.pprint(sales_info)
-            pp.pprint(all_sales)
+       
+        print("**************************")
+
+        print("************* RV mês a mês *************")
+        print("Operações comuns/Day-trade - Mercado à vista")
+        for key in sales_info['monthly']['acoes+etfs'].keys():
+            resultado = sales_info['monthly']['acoes+etfs'][key]['aggregated_results']
+            ir_fonte = sales_info['monthly']['acoes+etfs'][key]['dedo_duro']
+
+            if resultado != 0:
+                print("Mês:", key)
+                print("    Resultado", round(resultado, 2))
+                print("    IR Fonte", round(ir_fonte, 2))
+        print("***")
+        print("Operações FIIs")
+        for key in sales_info['monthly']['fiis'].keys():
+            resultado = sales_info['monthly']['fiis'][key]['aggregated_results']
+            ir_fonte = sales_info['monthly']['fiis'][key]['dedo_duro']
+
+            if resultado != 0:
+                print("Mês:", key)
+                print("    Resultado", round(resultado, 2))
+                print("    IR Fonte", round(ir_fonte, 2))
         print("**************************")
 
 
