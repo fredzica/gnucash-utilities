@@ -133,7 +133,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
 
-    return {'bens_direitos': acoes, 'sales': sales}
+    return acoes, sales
 
 
 def retrieve_usdbrl_quote(aux_yaml_path, day):
@@ -247,8 +247,7 @@ def main():
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
 
-        acoes_info = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
-        bens_direitos, all_sales = acoes_info.values()
+        bens_direitos, all_sales = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
 
         print("************* Bens e direitos *************")
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
