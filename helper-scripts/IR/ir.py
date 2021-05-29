@@ -11,6 +11,8 @@ from decimal import *
 from datetime import date
 from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
 
+pp = pprint.PrettyPrinter(indent=2)
+
 
 def extract_metadata(account):
     try:
@@ -29,12 +31,46 @@ def extract_metadata(account):
 
     return metadata
 
+def extract_sales_info(sales):
+    acoes_aggregated_profits = Decimal(0)
+    acoes_sales_value = Decimal(0)
+    dedo_duro = Decimal(0)
+    sales_info = {
+            'aggregated': {
+                'us': {
+                    'aggregated_profits': Decimal(0)
+                    },
+                'acoes': {
+                    'aggregated_profits': Decimal(0),
+                    'dedo_duro': Decimal(0)
+                    }
+                },
+            'monthly': {
+                'fiis': [],
+                'acoes+etfs': []
+                },
+            'debug': {}
+            }
+    for sale in sales:
+        if sale['type'] == 'acao' and sale['is_profit']:
+            acoes_sales_value += -sale['value']
+            acoes_aggregated_profits += sale['profit']
 
-def collect_bens_direitos_brasil(book, date_filter):
+    dedo_duro = acoes_sales_value * Decimal(0.00005)
+    acoes_aggregated_profits -= dedo_duro
+
+    sales_info['aggregated']['acoes']['aggregated_profits'] = acoes_aggregated_profits
+    sales_info['aggregated']['acoes']['dedo_duro'] = dedo_duro
+    sales_info['debug']['acoes_sales_value'] = acoes_sales_value
+    return sales_info
+
+
+def collect_bens_direitos_brasil(book, date_filter, minimum_date):
     acoes_account = book.accounts(name='Ações')
     fiis_account = book.accounts(name='FIIs')
     children = acoes_account.children + fiis_account.children
 
+    sales = []
     acoes = []
     for acao_account in children:
 
@@ -49,16 +85,36 @@ def collect_bens_direitos_brasil(book, date_filter):
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
 
+                if split.value > 0:
+                    value_purchases += Decimal(split.value)
+                    quantity_purchases += Decimal(split.quantity)
+                    price_avg = value_purchases/quantity_purchases
+                elif split.value < 0 and split.transaction.post_date >= minimum_date:
+                    sold_price = split.value/split.quantity
+                    is_profit = sold_price > price_avg
+                    positive_quantity = -split.quantity
+                    profit = sold_price * positive_quantity - price_avg * positive_quantity
+
+                    format = "%Y-%m-%d"
+                    date_str = split.transaction.post_date.strftime(format)
+                    sales.append({
+                        'name': acao_account.name, 
+                        'type': extract_metadata(acao_account)['type'],
+                        'date': date_str,
+                        'sold_price': sold_price, 
+                        'quantity': split.quantity,
+                        'value': split.value,
+                        'price_avg': price_avg, 
+                        'is_profit': is_profit, 
+                        'profit': profit
+                    })
+
                 # avg should go back to zero if everything was sold at some point
                 if quantity == 0:
                     price_avg = Decimal(0)
                     value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
 
-                if split.value > 0:
-                    value_purchases += Decimal(split.value)
-                    quantity_purchases += Decimal(split.quantity)
-                    price_avg = value_purchases/quantity_purchases
 
         if quantity > 0:
             metadata = extract_metadata(acao_account)
@@ -77,7 +133,7 @@ def collect_bens_direitos_brasil(book, date_filter):
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
 
-    return acoes
+    return {'bens_direitos': acoes, 'sales': sales}
 
 
 def retrieve_usdbrl_quote(aux_yaml_path, day):
@@ -170,77 +226,7 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
     return stocks
 
 
-def collect_aggregated_profits_data(book, date_filter, minimum_date):
-    acoes_account = book.accounts(name='Ações')
-
-    aggregated_profits = Decimal(0)
-    aggregated_loss = Decimal(0)
-    all_sells = Decimal(0)
-    sellings = {}
-    only_acoes = filter(lambda a: extract_metadata(a)['type'] == 'acao', acoes_account.children)
-    for acao_account in only_acoes:
-        '''
-        go on finding the average price
-        if less than 20k was sold during the month that the transaction is in and if it's a profit
-        add the profit to the aggregated value 
-        and subtract all exchange and fingerpointing (dedo-duro) costs from it
-        dedo-duro can be calculated since it's a known percentage
-        the exchange-related costs should be extracted proportionally to the total of the correspoding transaction?
-
-        log warning if the monthly selling exceeds 20k
-        '''
-
-        quantity = Decimal(0)
-        value = Decimal(0)
-
-        price_avg = Decimal(0)
-        value_purchases = Decimal(0)
-        quantity_purchases = Decimal(0)
-        for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
-            if split.transaction.post_date <= date_filter:
-                quantity += Decimal(split.quantity)
-                transaction_date = split.transaction.post_date
-
-                if split.value > 0:
-                    value_purchases += Decimal(split.value)
-                    quantity_purchases += Decimal(split.quantity)
-                    price_avg = value_purchases/quantity_purchases
-                elif split.value < 0 and split.transaction.post_date >= minimum_date:
-                    all_sells += -split.value
-                    sold_price = split.value/split.quantity
-                    is_profit = sold_price > price_avg
-                    positive_quantity = -split.quantity
-                    profit = sold_price * positive_quantity - price_avg * positive_quantity
-                    if is_profit:
-                        aggregated_profits += profit
-                    else:
-                        aggregated_loss += profit
-
-                    format = "%Y-%m-%d"
-                    date_str = split.transaction.post_date.strftime(format)
-                    sellings.setdefault(date_str, []).append({
-                        'name': acao_account.name, 
-                        'sold_price': sold_price, 
-                        'quantity': split.quantity,
-                        'value': split.value,
-                        'price_avg': price_avg, 
-                        'is_profit': is_profit, 
-                        'profit': profit
-                    })
-
-                # avg should go back to zero if everything was sold at some point
-                if quantity == 0:
-                    price_avg = Decimal(0)
-                    value_purchases = Decimal(0)
-                    quantity_purchases = Decimal(0)
-
-    dedo_duro = all_sells * Decimal(0.00005)
-    aggregated_profits -= dedo_duro
-    return (aggregated_profits, dedo_duro, {"total_sold_value": all_sells, 'all_sellings': sellings, 'aggregated_loss': aggregated_loss})
-
-
 def main():
-    pp = pprint.PrettyPrinter(indent=2)
 
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
@@ -261,8 +247,10 @@ def main():
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
 
+        acoes_info = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
+        bens_direitos, all_sales = acoes_info.values()
+
         print("************* Bens e direitos *************")
-        bens_direitos = collect_bens_direitos_brasil(book, maximum_date_filter)
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = bem_direito['metadata']
 
@@ -296,13 +284,17 @@ def main():
         print()
         print()
 
+        sales_info = extract_sales_info(all_sales)
         print("************* RV Agregado (exclui ETFs e FIIs) *************")
         print("A ser declarado em Rendimentos Isentos e Não tributáveis (?)")
-        (aggregated_profits, dedo_duro, debug_info) = collect_aggregated_profits_data(book, maximum_date_filter, minimum_date_filter)
-        print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(aggregated_profits, 2))
-        print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(dedo_duro, 2))
+        acoes_aggregated_profit = sales_info['aggregated']['acoes']['aggregated_profits']
+        acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
+        print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
+        print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
         if is_debug:
-            pp.pprint(debug_info)
+            pp.pprint(sales_info)
+            pp.pprint(all_sales)
         print("**************************")
+
 
 main()
