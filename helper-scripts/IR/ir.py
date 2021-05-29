@@ -34,7 +34,6 @@ def extract_metadata(account):
 def extract_sales_info(sales):
     acoes_aggregated_profits = Decimal(0)
     acoes_sales_value = Decimal(0)
-    dedo_duro = Decimal(0)
     sales_info = {
             'aggregated': {
                 'us': {
@@ -46,21 +45,43 @@ def extract_sales_info(sales):
                     }
                 },
             'monthly': {
-                'fiis': [],
-                'acoes+etfs': []
+                'fiis': {},
+                'acoes+etfs': {}
                 },
             'debug': {}
             }
+
+    for i in range(1, 13):
+        sales_info['monthly']['acoes+etfs'][i] = {'aggregated_results': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+        sales_info['monthly']['fiis'][i] = {'aggregated_results': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+
     for sale in sales:
         if sale['type'] == 'acao' and sale['is_profit']:
             acoes_sales_value += -sale['value']
             acoes_aggregated_profits += sale['profit']
 
-    dedo_duro = acoes_sales_value * Decimal(0.00005)
-    acoes_aggregated_profits -= dedo_duro
+        if sale['type'] == 'etf' or sale['type'] == 'acao' and not sale['is_profit']:
+            month = sale['date'].month
+            current = sales_info['monthly']['acoes+etfs'][month]
+
+            current['aggregated_results'] += sale['profit']
+            current['total_sales'] += -sale['value']
+            current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
+
+        if sale['type'] == 'fii':
+            month = sale['date'].month
+            current = sales_info['monthly']['fiis'][month]
+
+            current['aggregated_results'] += sale['profit']
+            current['total_sales'] += -sale['value']
+            current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
+
+
+    acoes_dedo_duro = acoes_sales_value * Decimal(0.00005)
+    acoes_aggregated_profits -= acoes_dedo_duro
 
     sales_info['aggregated']['acoes']['aggregated_profits'] = acoes_aggregated_profits
-    sales_info['aggregated']['acoes']['dedo_duro'] = dedo_duro
+    sales_info['aggregated']['acoes']['dedo_duro'] = acoes_dedo_duro
     sales_info['debug']['acoes_sales_value'] = acoes_sales_value
     return sales_info
 
@@ -100,7 +121,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                     sales.append({
                         'name': acao_account.name, 
                         'type': extract_metadata(acao_account)['type'],
-                        'date': date_str,
+                        'date': split.transaction.post_date,
                         'sold_price': sold_price, 
                         'quantity': split.quantity,
                         'value': split.value,
