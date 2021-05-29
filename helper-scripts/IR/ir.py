@@ -320,6 +320,7 @@ def main():
 
         print("************* RV mês a mês *************")
         print("Operações comuns/Day-trade - Mercado à vista")
+        print("Venda de ações com prejuízo, vendas em mês com mais de 20k ou vendas de ETFs")
         for key in sales_info['monthly']['acoes+etfs'].keys():
             resultado = sales_info['monthly']['acoes+etfs'][key]['aggregated_results']
             ir_fonte = sales_info['monthly']['acoes+etfs'][key]['dedo_duro']
