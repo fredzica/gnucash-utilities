@@ -270,6 +270,21 @@ def collect_proventos(book, minimum_date, maximum_date):
     return proventos
 
 
+def collect_us_dividends(book, minimum_date, maximum_date):
+    monthly_dividends = {}
+    for dividend_account in book.accounts(name='US Dividends').children:
+        for split in dividend_account.splits:
+            if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
+                month = split.transaction.post_date.month
+
+                if month not in monthly_dividends:
+                    monthly_dividends[month] = Decimal(0)
+
+                monthly_dividends[month] += -split.value
+
+    return monthly_dividends
+
+
 def main():
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
@@ -399,6 +414,11 @@ def main():
             pp.pprint(proventos)
         print("******")
         print("Dividendos no exterior")
+        us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter)
+        
+        pp.pprint(us_dividends)
+        if is_debug:
+            pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
         print("******")
