@@ -60,7 +60,7 @@ def extract_sales_info(sales):
             acoes_sales_value += -sale['value']
             acoes_aggregated_profits += sale['profit']
 
-        if sale['type'] == 'etf' or sale['type'] == 'acao' and not sale['is_profit']:
+        elif sale['type'] == 'etf' or sale['type'] == 'acao' and not sale['is_profit']:
             month = sale['date'].month
             current = sales_info['monthly']['acoes+etfs'][month]
 
@@ -68,13 +68,16 @@ def extract_sales_info(sales):
             current['total_sales'] += -sale['value']
             current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
 
-        if sale['type'] == 'fii':
+            sales_info['monthly']['acoes+etfs'][month] = current
+        elif sale['type'] == 'fii':
             month = sale['date'].month
             current = sales_info['monthly']['fiis'][month]
 
             current['aggregated_results'] += sale['profit']
             current['total_sales'] += -sale['value']
             current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
+
+            sales_info['monthly']['fiis'][month] = current
 
 
     acoes_dedo_duro = acoes_sales_value * Decimal(0.00005)
@@ -248,7 +251,6 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
 
 
 def main():
-
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
         print('Usage: ir.py gnucash_db_path aux_yaml_path year_filter is_debug (optional, default false)')
@@ -310,7 +312,7 @@ def main():
             pp.pprint(all_sales)
 
         print("************* RV Agregado (exclui ETFs e FIIs) *************")
-        print("A ser declarado em Rendimentos Isentos e Não tributáveis (?)")
+        print("A ser declarado em Rendimentos Isentos e Não tributáveis")
         acoes_aggregated_profit = sales_info['aggregated']['acoes']['aggregated_profits']
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
@@ -329,6 +331,10 @@ def main():
                 print("Mês:", key)
                 print("    Resultado", round(resultado, 2))
                 print("    IR Fonte", round(ir_fonte, 2))
+
+        if is_debug:
+            pp.pprint(sales_info['monthly']['acoes+etfs'])
+
         print("***")
         print("Operações FIIs")
         for key in sales_info['monthly']['fiis'].keys():
@@ -339,6 +345,10 @@ def main():
                 print("Mês:", key)
                 print("    Resultado", round(resultado, 2))
                 print("    IR Fonte", round(ir_fonte, 2))
+
+        if is_debug:
+            pp.pprint(sales_info['monthly']['fiis'])
+
         print("**************************")
 
 
