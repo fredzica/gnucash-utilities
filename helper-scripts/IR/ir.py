@@ -60,6 +60,7 @@ def extract_sales_info(sales):
             acoes_sales_value += -sale['value']
             acoes_aggregated_profits += sale['profit']
 
+        # TODO: unificar blocos abaixo?
         elif sale['type'] == 'etf' or sale['type'] == 'acao' and not sale['is_profit']:
             month = sale['date'].month
             current = sales_info['monthly']['acoes+etfs'][month]
@@ -249,6 +250,25 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
 
     return stocks
 
+def collect_proventos(book, date_filter):
+    dividendos = book.accounts(name='Dividendos').children
+    jcp = book.accounts(name='JCP').children
+
+    proventos = {}
+    for provento_account in dividendos + jcp:
+        name = provento_account.name
+        if name not in proventos:
+            acao_account = book.accounts(name='Ações').children(name=name)
+            metadata = extract_metadata(acao_account)
+            proventos[name] = {'fonte_pagadora': metadata['cnpj'], 'long_name': metadata['long_name'],'Dividendos': Decimal(0), 'JCP': Decimal(0)}
+
+        for split in provento_account.splits:
+            if split.transaction.post_date <= date_filter:
+                provento_type = provento_account.parent.name
+                proventos[name][provento_type] += -split.value
+
+    return proventos
+
 
 def main():
     if len(sys.argv) < 4:
@@ -349,6 +369,39 @@ def main():
         if is_debug:
             pp.pprint(sales_info['monthly']['fiis'])
 
+        print("**************************")
+
+
+        print("************* Rendimentos *************")
+        proventos = collect_proventos(book, maximum_date_filter)
+        print("JCP: Rendimentos Sujeitos à Tributação Exclusiva/Definitiva, código 9")
+        for key in proventos:
+            provento = proventos[key]
+            if provento['JCP'] != 0: 
+                print(key)
+                print("Fonte pagadora:", provento['fonte_pagadora'])
+                print("Nome da fonte pagadora:", provento['long_name'])
+                print("JCP:", provento['JCP'])
+                print("***")
+
+        print("******")
+        print("Dividendos: Rendimentos Isentos e Não tributáveis, código 9")
+        for key in proventos:
+            provento = proventos[key]
+            if provento['Dividendos'] != 0: 
+                print(key)
+                print("Fonte pagadora:", provento['fonte_pagadora'])
+                print("Nome da fonte pagadora:", provento['long_name'])
+                print("Dividendos:", provento['Dividendos'])
+                print("***")
+
+        if is_debug:
+            pp.pprint(proventos)
+        print("******")
+        print("Dividendos no exterior")
+        print("******")
+        print("Rendimentos de FIIs")
+        print("******")
         print("**************************")
 
 
