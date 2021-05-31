@@ -250,7 +250,7 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
 
     return stocks
 
-def collect_proventos(book, date_filter):
+def collect_proventos(book, minimum_date, maximum_date):
     dividendos = book.accounts(name='Dividendos').children
     jcp = book.accounts(name='JCP').children
 
@@ -263,7 +263,7 @@ def collect_proventos(book, date_filter):
             proventos[name] = {'fonte_pagadora': metadata['cnpj'], 'long_name': metadata['long_name'],'Dividendos': Decimal(0), 'JCP': Decimal(0)}
 
         for split in provento_account.splits:
-            if split.transaction.post_date <= date_filter:
+            if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
                 provento_type = provento_account.parent.name
                 proventos[name][provento_type] += -split.value
 
@@ -373,8 +373,8 @@ def main():
 
 
         print("************* Rendimentos *************")
-        proventos = collect_proventos(book, maximum_date_filter)
-        print("JCP: Rendimentos Sujeitos à Tributação Exclusiva/Definitiva, código 9")
+        proventos = collect_proventos(book, minimum_date_filter, maximum_date_filter)
+        print("JCP: Rendimentos Sujeitos à Tributação Exclusiva/Definitiva, código 10")
         for key in proventos:
             provento = proventos[key]
             if provento['JCP'] != 0: 
