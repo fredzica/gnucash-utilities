@@ -177,7 +177,7 @@ def process_csv(csv_file):
                 'value': amount
             })
         else:
-            raise Exception("Unrecognizable row")
+            raise Exception("Unrecognizable row {}".format(row))
 
     return (stocks, dividends, transfers)
 
