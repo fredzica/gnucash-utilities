@@ -7,8 +7,6 @@ from decimal import *
 from datetime import datetime
 from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
 
-# este script necessita das notas de corretagem salvas em csv com o delimitador ';'
-
 def write_to_gnucash(stocks, dividends, transfers):
     with open_book(gnucash_db_path, readonly=False) as book:
         brokerage_account = book.accounts(name='Conta no TD Ameritrade')
@@ -136,21 +134,21 @@ def write_to_gnucash(stocks, dividends, transfers):
         print("Transferred amount: ${}".format(transferred))
 
 def process_csv(csv_file):
-
-    # read stocks, amounts and prices
     stocks = []
     dividends = []
     transfers = []
 
     reader = csv.DictReader(csv_file, delimiter = ',', quotechar='"')
     for row in reader:
-        date = row['DATE']
+        date = row['Date']
         if 'end' in date.lower():
             break
 
-        description = row['DESCRIPTION']
-        symbol = row['SYMBOL']
-        amount = Decimal(row['AMOUNT'])
+        description = row['Description']
+        action = row['Action']
+        symbol = row['Symbol']
+        str_amount = row['Amount'].replace('$', '')
+        amount = Decimal(str_amount) if str_amount else None
         if 'wire' in description.lower():
             transfers.append({
                 'date': date,
@@ -163,7 +161,7 @@ def process_csv(csv_file):
                 'date': date,
                 'description': description,
                 'symbol': symbol,
-                'quantity': row['QUANTITY'],
+                'quantity': row['Quantity'],
                 'value': -amount,
             })
         elif any(x in description.lower() for x in ['dividend', 'w-8', 'short term capital gains']):
@@ -173,6 +171,11 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'value': amount
             })
+        elif any(x in action.lower() for x in ['security transfer']):
+            print('Warning: Security transfer found. You should manually import it {} \n'.format(row))
+        elif date.lower() == 'transactions total':
+            # usually the last line of the report is this
+            continue
         else:
             raise Exception("Unrecognizable row {}".format(row))
 
@@ -186,10 +189,12 @@ if len(sys.argv) < 3:
 file_path = sys.argv[1]
 gnucash_db_path = sys.argv[2]
 only_check_csv = len(sys.argv) > 3
-
 with open(file_path,  newline='') as csv_file:
+    # skip first line
+    next(csv_file)
+
     stocks, dividends, transfers = process_csv(csv_file)
-    if only_check_csv is None:
+    if only_check_csv:
         print(stocks)
         print(dividends)
         print(transfers)
