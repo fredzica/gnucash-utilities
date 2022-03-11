@@ -1,11 +1,15 @@
 import sys
 import os
 
+import pprint
+pp = pprint.PrettyPrinter(indent=2)
+
 import csv
 import re
 from decimal import *
 from datetime import datetime
 from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
+
 
 def write_to_gnucash(stocks, dividends, transfers):
     with open_book(gnucash_db_path, readonly=False) as book:
@@ -133,6 +137,7 @@ def write_to_gnucash(stocks, dividends, transfers):
         transferred = sum(transfer['value'] for transfer in transfers)
         print("Transferred amount: ${}".format(transferred))
 
+
 def process_csv(csv_file):
     stocks = []
     dividends = []
@@ -144,19 +149,19 @@ def process_csv(csv_file):
         if 'end' in date.lower():
             break
 
-        description = row['Description']
         action = row['Action']
         symbol = row['Symbol']
+        description = "{}-{}-{}".format(action, symbol, row['Description'])
         str_amount = row['Amount'].replace('$', '')
         amount = Decimal(str_amount) if str_amount else None
-        if 'wire' in description.lower():
+        if 'wire funds received' == action.lower():
             transfers.append({
                 'date': date,
                 'direction': 'incoming' if amount > 0 else 'outgoing',
                 'description': description,
                 'value': amount
             })
-        elif any(x in description.lower() for x in ['bought', 'sold']):
+        elif 'buy' == action.lower() or 'sell' == action.lower():
             stocks.append({
                 'date': date,
                 'description': description,
@@ -164,15 +169,16 @@ def process_csv(csv_file):
                 'quantity': row['Quantity'],
                 'value': -amount,
             })
-        elif any(x in description.lower() for x in ['dividend', 'w-8', 'short term capital gains']):
+        elif any(x in action.lower() for x in ['dividend', 'nra tax adj']):
             dividends.append({
                 'date': date,
                 'description': description,
                 'symbol': symbol,
                 'value': amount
             })
-        elif any(x in action.lower() for x in ['security transfer']):
-            print('Warning: Security transfer found. You should manually import it {} \n'.format(row))
+        elif 'security transfer' == action.lower():
+            print('Warning: Security transfer found. You should manually import it')
+            pp.pprint(row)
         elif date.lower() == 'transactions total':
             # usually the last line of the report is this
             continue
@@ -182,22 +188,28 @@ def process_csv(csv_file):
     return (stocks, dividends, transfers)
 
 
-if len(sys.argv) < 3:
-    print("Incorrect arguments. Arguments are file_path, gnucash_db_path and only_check_csv (optional)")
-    exit()
+def main():
+    if len(sys.argv) < 3:
+        print("Incorrect arguments. Arguments are file_path, gnucash_db_path and only_check_csv (optional)")
+        exit()
 
-file_path = sys.argv[1]
-gnucash_db_path = sys.argv[2]
-only_check_csv = len(sys.argv) > 3
-with open(file_path,  newline='') as csv_file:
-    # skip first line
-    next(csv_file)
+    file_path = sys.argv[1]
+    gnucash_db_path = sys.argv[2]
+    only_check_csv = len(sys.argv) > 3
+    with open(file_path,  newline='') as csv_file:
+        # skip first line
+        next(csv_file)
 
-    stocks, dividends, transfers = process_csv(csv_file)
-    if only_check_csv:
-        print(stocks)
-        print(dividends)
-        print(transfers)
-    else:
-        write_to_gnucash(stocks, dividends, transfers)
+        stocks, dividends, transfers = process_csv(csv_file)
+        if only_check_csv:
+            print("stocks")
+            pp.pprint(stocks)
+            print("dividends")
+            pp.pprint(dividends)
+            print("transfers")
+            pp.pprint(transfers)
+        else:
+            write_to_gnucash(stocks, dividends, transfers)
 
+
+main()
