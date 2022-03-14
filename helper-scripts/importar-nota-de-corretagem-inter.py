@@ -139,7 +139,7 @@ def process_csv(csv_file):
             has_sold = row['C/V'] == 'V'
 
         if row['ESPECIFICAÇÃO DO TÍTULO'].startswith('SUBTOTAL'):
-            amount = row['QUANTIDADE']
+            amount = row['QUANTIDADE'].replace('.', '')
             if has_sold:
                 amount = '-' + amount
 
