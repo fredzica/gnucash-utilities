@@ -1,5 +1,7 @@
 import sys
 import os
+import shutil
+import time
 
 import pprint
 pp = pprint.PrettyPrinter(indent=2)
@@ -12,6 +14,10 @@ from piecash import open_book, ledger, factories, Account, Transaction, Commodit
 
 
 def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
+    # backing up the db file first
+    ms = time.time() * 1000.0
+    shutil.copy(gnucash_db_path, '{}.{}.schwab-importing'.format(gnucash_db_path, ms))
+
     with open_book(gnucash_db_path, readonly=False) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 

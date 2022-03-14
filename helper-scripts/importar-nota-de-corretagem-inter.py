@@ -1,5 +1,7 @@
 import sys
 import os
+import shutil
+import time
 
 import csv
 import re
@@ -13,6 +15,10 @@ gnucash_db_path = sys.argv[2]
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
 def write_to_gnucash(brokerage_statements):
+    # backing up the db file first
+    ms = time.time() * 1000.0
+    shutil.copy(gnucash_db_path, '{}.{}.inter-importing'.format(gnucash_db_path, ms))
+
     with open_book(gnucash_db_path, readonly=False) as book:
         bank_account = book.accounts(name='Conta no Inter')
         sold_value = Decimal(0)
