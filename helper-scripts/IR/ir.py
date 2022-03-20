@@ -115,24 +115,29 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
                 elif split.value < 0 and split.transaction.post_date >= minimum_date:
-                    sold_price = split.value/split.quantity
-                    is_profit = sold_price > price_avg
-                    positive_quantity = -split.quantity
-                    profit = sold_price * positive_quantity - price_avg * positive_quantity
+                    is_transfer_split = split.quantity == 0
+                    if is_transfer_split:
+                        value_purchases += Decimal(split.value)
+                        price_avg = value_purchases/quantity_purchases
+                    else:
+                        sold_price = split.value/split.quantity
+                        is_profit = sold_price > price_avg
+                        positive_quantity = -split.quantity
+                        profit = sold_price * positive_quantity - price_avg * positive_quantity
 
-                    format = "%Y-%m-%d"
-                    date_str = split.transaction.post_date.strftime(format)
-                    sales.append({
-                        'name': acao_account.name, 
-                        'type': extract_metadata(acao_account)['type'],
-                        'date': split.transaction.post_date,
-                        'sold_price': sold_price, 
-                        'quantity': split.quantity,
-                        'value': split.value,
-                        'price_avg': price_avg, 
-                        'is_profit': is_profit, 
-                        'profit': profit
-                    })
+                        format = "%Y-%m-%d"
+                        date_str = split.transaction.post_date.strftime(format)
+                        sales.append({
+                            'name': acao_account.name,
+                            'type': extract_metadata(acao_account)['type'],
+                            'date': split.transaction.post_date,
+                            'sold_price': sold_price,
+                            'quantity': split.quantity,
+                            'value': split.value,
+                            'price_avg': price_avg,
+                            'is_profit': is_profit,
+                            'profit': profit
+                        })
 
                 # avg should go back to zero if everything was sold at some point
                 if quantity == 0:
