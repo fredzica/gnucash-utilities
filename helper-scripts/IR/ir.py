@@ -1,10 +1,9 @@
 import sys
 import os
-import csv
 import re
 import pprint
 
-import yaml
+import csv
 import json
 
 from decimal import *
@@ -166,35 +165,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
     return acoes, sales
 
 
-def retrieve_usdbrl_quote(aux_yaml_path, day):
-    with open(aux_yaml_path, 'r') as yaml_file:
-
-        # yaml with Decimal objects can only be loaded with unsafe_load
-        yaml_content = yaml.unsafe_load(yaml_file)
-
-        if yaml_content is None or not 'usdbrl' in yaml_content or yaml_content['usdbrl'] is None:
-            print('yaml is currently empty')
-            yaml_content = {'usdbrl': {}}
-
-        usdbrl_quotes = yaml_content['usdbrl']
-        
-        try:
-            day_quote = usdbrl_quotes[day]
-            return Decimal(day_quote)
-        except KeyError:
-            print("What is the USDBRL quote for {}?".format(day))
-            quote = Decimal(input())
-
-            usdbrl_quotes[day] = quote
-            yaml_content['usdbrl'].update(usdbrl_quotes)
- 
-            with open(aux_yaml_path, 'w') as yaml_file_write:
-                yaml.dump(yaml_content, yaml_file_write)
-
-            return quote
-
-
-def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
+def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
     stocks_account = book.accounts(name='Ações no exterior')
     children = stocks_account.children
 
@@ -222,10 +193,10 @@ def collect_bens_direitos_stocks(book, aux_yaml_path, date_filter):
                     quantity_purchases = Decimal(0)
 
                 if split.value > 0:
-                    format = "%d-%m-%Y"
-                    day = split.transaction.post_date.strftime(format)
+                    format = "%d%m%Y"
+                    date = split.transaction.post_date.strftime(format)
 
-                    day_usdbrl = retrieve_usdbrl_quote(aux_yaml_path, day)
+                    day_usdbrl = quotes_by_date[date]['ask']
 
                     dollar_value_purchases += Decimal(split.value)
                     real_value_purchases += (day_usdbrl * Decimal(split.value))
@@ -290,6 +261,21 @@ def collect_us_dividends(book, minimum_date, maximum_date):
     return monthly_dividends
 
 
+def retrieve_usdbrl_quotes(quotes_csv_path):
+    quotes_by_date = {}
+
+    with open(quotes_csv_path,  newline='') as csv_file:
+        reader = csv.DictReader(csv_file, delimiter = ';')
+        for row in reader:
+            date = row['data']
+            bid = row['compra']
+            ask = row['venda']
+
+            quotes_by_date[date] = {'bid': Decimal(bid.replace(',', '.')), 'ask': Decimal(ask.replace(',', '.'))}
+
+    return quotes_by_date
+
+
 def main():
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
@@ -297,8 +283,10 @@ def main():
         return
 
     gnucash_db_path = sys.argv[1]
-    aux_yaml_path = sys.argv[2]
+    quotes_csv_path = sys.argv[2]
     year_filter = sys.argv[3]
+
+    quotes_by_date = retrieve_usdbrl_quotes(quotes_csv_path)
 
     is_debug = False
     if len(sys.argv) > 4:
@@ -326,7 +314,7 @@ def main():
             if is_debug:
                 pp.pprint(bem_direito)
 
-        stocks = collect_bens_direitos_stocks(book, aux_yaml_path, maximum_date_filter)
+        stocks = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter)
         for stock in sorted(stocks, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = stock['metadata']
 
@@ -336,7 +324,7 @@ def main():
             print(stock['name'])
             print("Código:", metadata['codigo_bem_direito'])
             print("Localização: EUA")
-            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora TD Ameritrade.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
             print("Situação R$:", round(stock['real_value'], 2))
             print("***")
 
