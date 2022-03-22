@@ -96,6 +96,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
 
     sales = []
     acoes = []
+    held_during_filtered_period = set()
     for acao_account in children:
 
         quantity = Decimal(0)
@@ -106,6 +107,8 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
         quantity_purchases = Decimal(0)
         for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
+                held_during_filtered_period.add(acao_account.name)
+
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
 
@@ -124,8 +127,6 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                         positive_quantity = -split.quantity
                         profit = sold_price * positive_quantity - price_avg * positive_quantity
 
-                        format = "%Y-%m-%d"
-                        date_str = split.transaction.post_date.strftime(format)
                         sales.append({
                             'name': acao_account.name,
                             'type': extract_metadata(acao_account)['type'],
@@ -139,10 +140,15 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                         })
 
                 # avg should go back to zero if everything was sold at some point
-                if quantity == 0:
+                sold_all = quantity == 0
+                if sold_all:
                     price_avg = Decimal(0)
                     value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
+
+                    sold_before_period_start = split.transaction.post_date <= minimum_date
+                    if sold_before_period_start:
+                        held_during_filtered_period.remove(acao_account.name)
 
 
         if quantity > 0:
@@ -162,7 +168,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
 
-    return acoes, sales
+    return acoes, sales, held_during_filtered_period
 
 
 def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
@@ -172,7 +178,6 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
     stocks = []
     for stock_account in children:
         quantity = Decimal(0)
-        value = Decimal(0)
 
         dollar_price_avg = Decimal(0)
         real_price_avg = Decimal(0)
@@ -298,7 +303,15 @@ def main():
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
 
-        bens_direitos, all_sales = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
+        bens_direitos, all_sales, held_during_filtered_period = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
+
+        print("******* Papéis que estiveram na carteira durante {} ******".format(year_filter))
+        print("(Para saber quais informes devem ser coletados)")
+        for papel in held_during_filtered_period:
+            print(papel)
+        print("**************************")
+        print()
+        print()
 
         print("************* Bens e direitos *************")
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
