@@ -55,7 +55,6 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
 
             value = Decimal(stock['value'])
             quantity = Decimal(stock['quantity'])
-            fee = Decimal(stock['fee'])
             if value < 0:
                 quantity = -quantity
                 print("******* You have sold the stock {}. Check if you should pay taxes this month!".format(symbol))
@@ -67,14 +66,10 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
                 description=description,
                 post_date=date.date(),
                 splits=[
-                    Split(value=value-fee, quantity=quantity, account=stock_account),
+                    Split(value=value, quantity=quantity, account=stock_account),
                     Split(value=-value, account=brokerage_account)
                 ]
             )
-
-            if fee != 0:
-                fee_account = book.accounts(name='Schwab Fees')
-                stock_transaction.splits.append(Split(value=fee, account=fee_account))
 
             print(ledger(stock_transaction))
 
@@ -187,8 +182,6 @@ def process_csv(csv_file):
         str_amount = row['Amount'].replace('$', '')
         amount = Decimal(str_amount) if str_amount else None
 
-        str_fee = row['Fees & Comm'].replace('$', '')
-        fee = Decimal(str_fee) if str_fee != '' else Decimal(0)
         if 'wire funds received' == action.lower():
             transfers.append({
                 'date': date,
@@ -203,7 +196,6 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'quantity': row['Quantity'],
                 'value': -amount,
-                'fee': fee
             })
         elif any(x in action.lower() for x in ['dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div']):
             dividends.append({
