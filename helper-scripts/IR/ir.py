@@ -305,6 +305,29 @@ def collect_proventos(book, minimum_date, maximum_date):
     return proventos
 
 
+def collect_proventos_fiis(book, minimum_date, maximum_date):
+    rendimentos = book.accounts(name='Receita de FIIs').children
+
+    proventos = {}
+    for provento_account in rendimentos:
+        name = provento_account.name
+        metadata = json.loads(provento_account.description)
+        fonte_pagadora = metadata['fonte_pagadora']
+        if fonte_pagadora not in proventos:
+            proventos[fonte_pagadora] = {'fiis': [], 'long_name': metadata['long_name'], 'proventos': Decimal(0)}
+
+        value_sum = Decimal(0)
+        for split in provento_account.splits:
+            if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
+                value_sum += -split.value
+
+        if value_sum != 0:
+            proventos[fonte_pagadora]['proventos'] += value_sum
+            proventos[fonte_pagadora]['fiis'].append(name)
+
+    return proventos
+
+
 def collect_us_dividends(book, minimum_date, maximum_date):
     monthly_dividends = {}
     for dividend_account in book.accounts(name='US Dividends').children:
@@ -494,8 +517,19 @@ def main():
             pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
-        #held_during_filtered_period.add(key)
-        print("******")
+        proventos_fiis = collect_proventos_fiis(book, minimum_date_filter, maximum_date_filter)
+        for key in proventos_fiis:
+
+            provento = proventos_fiis[key]
+            if provento['proventos'] != 0: 
+                need_additional_data.update(provento['fiis'])
+
+                print(key)
+                print(provento['fiis'])
+                print("Nome da fonte pagadora:", provento['long_name'])
+                print("Rendimento:", provento['proventos'])
+                print("***")
+
         print("**************************")
 
         print("******* Papéis que estiveram na carteira ou que receberam proventos durante {} ******".format(year_filter))
