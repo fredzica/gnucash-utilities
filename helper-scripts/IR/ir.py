@@ -93,6 +93,56 @@ def extract_sales_info(sales):
     return sales_info
 
 
+def collect_crypto(book, date_filter):
+    cryptos_account = book.accounts(name='Crypto')
+    children = cryptos_account.children
+
+    crypto = []
+    for crypto_account in children:
+        quantity = Decimal(0)
+        value = Decimal(0)
+
+        price_avg = Decimal(0)
+        value_purchases = Decimal(0)
+        quantity_purchases = Decimal(0)
+        for split in sorted(crypto_account.splits, key=lambda x: x.transaction.post_date):
+            if split.transaction.post_date <= date_filter:
+
+                quantity += Decimal(split.quantity)
+                transaction_date = split.transaction.post_date
+
+                if split.value > 0:
+                    value_purchases += Decimal(split.value)
+                    quantity_purchases += Decimal(split.quantity)
+                    price_avg = value_purchases/quantity_purchases
+
+                # avg should go back to zero if everything was sold at some point
+                sold_all = quantity == 0
+                if sold_all:
+                    price_avg = Decimal(0)
+                    value_purchases = Decimal(0)
+                    quantity_purchases = Decimal(0)
+
+        if quantity > 0:
+            metadata = extract_metadata(crypto_account)
+
+            crypto.append({
+                    'name': crypto_account.name,
+                    'quantity': quantity,
+                    'value': price_avg * quantity,
+                    'price_avg': price_avg,
+                    'value_purchases': value_purchases,
+                    'quantity_purchases': quantity_purchases,
+                    'last_transaction_date': transaction_date,
+                    'metadata': metadata
+            })
+
+        elif quantity < 0:
+            raise Exception("The stock {} has a negative quantity {}!".format(crypto_account.name, quantity))
+
+    return crypto
+
+
 def collect_bens_direitos_brasil(book, date_filter, minimum_date):
     acoes_account = book.accounts(name='Ações')
     fiis_account = book.accounts(name='FIIs')
@@ -288,7 +338,7 @@ def retrieve_usdbrl_quotes(quotes_csv_path):
 def main():
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
-        print('Usage: ir.py gnucash_db_path aux_yaml_path year_filter is_debug (optional, default false)')
+        print('Usage: ir.py gnucash_db_path quotes_csv_path year_filter is_debug (optional, default false)')
         return
 
     gnucash_db_path = sys.argv[1]
@@ -340,6 +390,21 @@ def main():
 
             if is_debug:
                 pp.pprint(stock)
+
+        cryptos = collect_crypto(book, maximum_date_filter)
+        for crypto in cryptos:
+            metadata = crypto['metadata']
+
+            print(crypto['name'])
+            print("Grupo:", metadata['grupo_bem_direito'])
+            print("Código:", metadata['codigo_bem_direito'])
+            print("Discriminação: {} {} - {}".format(crypto['quantity'], crypto['name'], metadata['long_name']))
+            print("Situação R$:", round(crypto['value'], 2))
+            print("***")
+
+            if is_debug:
+                pp.pprint(crypto)
+
         print("**************************")
         print()
         print()
