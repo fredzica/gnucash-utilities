@@ -303,16 +303,7 @@ def main():
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
 
-        bens_direitos, all_sales, held_during_filtered_period = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
-
-        print("******* Papéis que estiveram na carteira durante {} ******".format(year_filter))
-        print("(Para saber quais informes devem ser coletados)")
-        for papel in held_during_filtered_period:
-            print(papel)
-        print("**************************")
-        print()
-        print()
-
+        bens_direitos, all_sales, need_additional_data = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
         print("************* Bens e direitos *************")
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = bem_direito['metadata']
@@ -399,6 +390,8 @@ def main():
         for key in proventos:
             provento = proventos[key]
             if provento['JCP'] != 0: 
+                need_additional_data.add(key)
+
                 print(key)
                 print("Fonte pagadora:", provento['fonte_pagadora'])
                 print("Nome da fonte pagadora:", provento['long_name'])
@@ -408,8 +401,11 @@ def main():
         print("******")
         print("Dividendos: Rendimentos Isentos e Não tributáveis, código 9")
         for key in proventos:
+
             provento = proventos[key]
             if provento['Dividendos'] != 0: 
+                need_additional_data.add(key)
+
                 print(key)
                 print("Fonte pagadora:", provento['fonte_pagadora'])
                 print("Nome da fonte pagadora:", provento['long_name'])
@@ -427,7 +423,14 @@ def main():
             pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
+        #held_during_filtered_period.add(key)
         print("******")
+        print("**************************")
+
+        print("******* Papéis que estiveram na carteira ou que receberam proventos durante {} ******".format(year_filter))
+        print("(Para saber quais informes devem ser coletados)")
+        for papel in need_additional_data:
+            print(papel)
         print("**************************")
 
 
