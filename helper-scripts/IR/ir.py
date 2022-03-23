@@ -22,16 +22,17 @@ def extract_metadata(account):
     if metadata is None or not 'type' in metadata:
         raise Exception("The type field not found for {}".format(account.name))
 
-    if metadata['type'] not in ['etf', 'acao', 'fii', 'us stock', 'us etf', 'reit']:
+    if metadata['type'] not in ['etf', 'acao', 'bdr', 'fii', 'us stock', 'us etf', 'reit', 'btc', 'crypto']:
         raise Exception("The type for {} is not valid".format(account.name))
 
-    ir_group_dict = {'etf': 7, 'us etf': 7, 'fii': 7, 'acao': 3, 'us stock': 3, 'reit': 3}
+    ir_group_dict = {'etf': 7, 'us etf': 7, 'fii': 7, 'acao': 3, 'bdr': 4, 'us stock': 3, 'reit': 3, 'btc': 8, 'crypto': 8}
     metadata['grupo_bem_direito'] = ir_group_dict[metadata['type']]
 
-    ir_code_dict = {'etf': 9, 'us etf': 9, 'fii': 3, 'acao': 1, 'us stock': 1, 'reit': 1}
+    ir_code_dict = {'etf': 9, 'us etf': 9, 'fii': 3, 'acao': 1, 'bdr': 4, 'us stock': 1, 'reit': 1, 'btc': 1, 'crypto': 2}
     metadata['codigo_bem_direito'] = ir_code_dict[metadata['type']]
 
     return metadata
+
 
 def extract_sales_info(sales):
     acoes_aggregated_profits = Decimal(0)
