@@ -25,7 +25,10 @@ def extract_metadata(account):
     if metadata['type'] not in ['etf', 'acao', 'fii', 'us stock', 'us etf', 'reit']:
         raise Exception("The type for {} is not valid".format(account.name))
 
-    ir_code_dict = {'etf': 74, 'us etf': 74, 'fii': 73, 'acao': 31, 'us stock': 31, 'reit': 31}
+    ir_group_dict = {'etf': 7, 'us etf': 7, 'fii': 7, 'acao': 3, 'us stock': 3, 'reit': 3}
+    metadata['grupo_bem_direito'] = ir_group_dict[metadata['type']]
+
+    ir_code_dict = {'etf': 9, 'us etf': 9, 'fii': 3, 'acao': 1, 'us stock': 1, 'reit': 1}
     metadata['codigo_bem_direito'] = ir_code_dict[metadata['type']]
 
     return metadata
@@ -305,10 +308,11 @@ def main():
 
         bens_direitos, all_sales, need_additional_data = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
         print("************* Bens e direitos *************")
-        for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
+        for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = bem_direito['metadata']
 
             print(bem_direito['name'])
+            print("Grupo:", metadata['grupo_bem_direito'])
             print("Código:", metadata['codigo_bem_direito'])
             print("CNPJ:", metadata['cnpj'])
             print("Discriminação: {} {} - CORRETORA INTER DTVM".format(round(bem_direito['quantity'], 0), bem_direito['name']))
@@ -319,13 +323,14 @@ def main():
                 pp.pprint(bem_direito)
 
         stocks = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter)
-        for stock in sorted(stocks, key=lambda x: (x['metadata']['codigo_bem_direito'], x['name'])):
+        types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
+        for stock in sorted(stocks, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = stock['metadata']
 
-            types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
             type_description = types[metadata['type']]
 
             print(stock['name'])
+            print("Grupo:", metadata['grupo_bem_direito'])
             print("Código:", metadata['codigo_bem_direito'])
             print("Localização: EUA")
             print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
