@@ -1,12 +1,10 @@
 import sys
-import os
-import re
 import pprint
 
 import csv
 import json
 
-from decimal import *
+from decimal import Decimal
 from datetime import date
 from piecash import open_book
 
@@ -100,11 +98,11 @@ def collect_crypto(book, date_filter):
     crypto = []
     for crypto_account in children:
         quantity = Decimal(0)
-        value = Decimal(0)
 
         price_avg = Decimal(0)
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
+        transaction_date = None
         for split in sorted(crypto_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
 
@@ -154,11 +152,11 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
     for acao_account in children:
 
         quantity = Decimal(0)
-        value = Decimal(0)
 
         price_avg = Decimal(0)
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
+        transaction_date = None
         for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 held_during_filtered_period.add(acao_account.name)
@@ -238,6 +236,8 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
         dollar_value_purchases = Decimal(0)
         real_value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
+        transaction_date = None
+        day_usdbrl = None
         for split in sorted(stock_account.splits, key=lambda x: x.transaction.post_date):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
@@ -281,7 +281,7 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
                     'metadata': metadata
             })
         elif quantity < 0:
-            raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
+            raise Exception("The stock {} has a negative quantity {}!".format(stock_account.name, quantity))
 
     return stocks
 
@@ -392,7 +392,7 @@ def main():
             print("Discriminação: {} {} - CORRETORA INTER DTVM".format(round(bem_direito['quantity'], 0), bem_direito['name']))
             print("Situação R$:", round(bem_direito['value'], 2))
             print("***")
-            
+
             if is_debug:
                 pp.pprint(bem_direito)
 
@@ -443,7 +443,7 @@ def main():
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
-       
+
         print("**************************")
 
         print("************* RV mês a mês *************")
@@ -483,7 +483,7 @@ def main():
         print("JCP: Rendimentos Sujeitos à Tributação Exclusiva/Definitiva, código 10")
         for key in proventos:
             provento = proventos[key]
-            if provento['JCP'] != 0: 
+            if provento['JCP'] != 0:
                 need_additional_data.add(key)
 
                 print(key)
@@ -497,7 +497,7 @@ def main():
         for key in proventos:
 
             provento = proventos[key]
-            if provento['Dividendos'] != 0: 
+            if provento['Dividendos'] != 0:
                 need_additional_data.add(key)
 
                 print(key)
@@ -511,7 +511,7 @@ def main():
         print("******")
         print("Dividendos no exterior")
         us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter)
-        
+
         pp.pprint(us_dividends)
         if is_debug:
             pp.pprint(us_dividends)
@@ -521,7 +521,7 @@ def main():
         for key in proventos_fiis:
 
             provento = proventos_fiis[key]
-            if provento['proventos'] != 0: 
+            if provento['proventos'] != 0:
                 need_additional_data.update(provento['fiis'])
 
                 print(key)
