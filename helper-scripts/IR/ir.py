@@ -6,7 +6,7 @@ import json
 
 from decimal import Decimal
 from datetime import date
-from piecash import open_book
+from piecash import open_book, ledger
 
 pp = pprint.PrettyPrinter(indent=2)
 
@@ -343,6 +343,17 @@ def collect_us_dividends(book, minimum_date, maximum_date):
     return monthly_dividends
 
 
+def collect_bonificacoes(book, minimum_date, maximum_date):
+    account = book.accounts(name='Bonificações')
+
+    bonificacoes = []
+    for split in sorted(account.splits, key=lambda x: x.transaction.post_date):
+        if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
+            bonificacoes.append(ledger(split.transaction))
+
+    return bonificacoes
+
+
 def retrieve_usdbrl_quotes(quotes_csv_path):
     quotes_by_date = {}
 
@@ -530,6 +541,11 @@ def main():
                 print("Rendimento:", provento['proventos'])
                 print("***")
 
+        print("******")
+        print("Bonificações")
+        bonificacoes = collect_bonificacoes(book, minimum_date_filter, maximum_date_filter)
+        for bonificacao in bonificacoes:
+            print(bonificacao)
         print("**************************")
 
         print("******* Papéis que estiveram na carteira ou que receberam proventos durante {} ******".format(year_filter))
