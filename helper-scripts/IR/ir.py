@@ -164,7 +164,8 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
 
-                if split.value > 0:
+                is_stock_split = split.value == 0 and split.action == 'Split'
+                if split.value > 0 or is_stock_split:
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
@@ -251,7 +252,8 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
                     real_value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
 
-                if split.value > 0:
+                is_stock_split = split.value == 0 and split.action == 'Split'
+                if split.value > 0 or is_stock_split:
                     format = "%d%m%Y"
                     date = split.transaction.post_date.strftime(format)
 
