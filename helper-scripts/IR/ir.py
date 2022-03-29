@@ -88,7 +88,7 @@ def extract_sales_info(sales):
             current['dedo_duro'] += -sale['value'] * DEDO_DURO_MULTIPLIER
             current['total_sales'] += -sale['value']
         else:
-            raise Exception("Unexpected flow")
+            raise Exception("Unexpected flow", sale)
 
     acoes_dedo_duro = acoes_sales_value * DEDO_DURO_MULTIPLIER
     acoes_aggregated_profits -= acoes_dedo_duro
@@ -121,6 +121,8 @@ def collect_crypto(book, date_filter):
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
+                elif split.value == 0:
+                    raise Exception("Unexpected crypto split", split.transaction.post_date, crypto_account.name)
 
                 # avg should go back to zero if everything was sold at some point
                 sold_all = quantity == 0
@@ -178,8 +180,8 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
                 elif split.value < 0 and split.transaction.post_date >= minimum_date:
-                    is_transfer_split = split.quantity == 0
-                    if is_transfer_split:
+                    is_transfer = split.quantity == 0
+                    if is_transfer:
                         value_purchases += Decimal(split.value)
                         price_avg = value_purchases/quantity_purchases
                     else:
@@ -199,6 +201,8 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                             'is_profit': is_profit,
                             'profit': profit
                         })
+                elif split.transaction.post_date >= minimum_date:
+                    raise Exception("Split wasn't recognized", acao_account.name, split.transaction.post_date)
 
                 # avg should go back to zero if everything was sold at some point
                 sold_all = quantity == 0
