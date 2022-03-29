@@ -53,36 +53,41 @@ def extract_sales_info(sales):
             }
 
     for i in range(1, 13):
-        sales_info['monthly']['acoes+etfs'][i] = {'aggregated_results': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
-        sales_info['monthly']['fiis'][i] = {'aggregated_results': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+        sales_info['monthly']['acoes+etfs'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+        sales_info['monthly']['fiis'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
 
+    # calculating the total monthly sales
     for sale in sales:
-        if sale['type'] == 'acao' and sale['is_profit']:
+        if sale['type'] == 'acao' or sale['type'] == 'etf':
+            month = sale['date'].month
+            sales_info['monthly']['acoes+etfs'][month]['total_sales'] += -sale['value']
+
+    DEDO_DURO_MULTIPLIER = 0.00005
+    TAX_EXEMPT_SALE_LIMIT = 20000
+    for sale in sales:
+        month = sale['date'].month
+        current_acoes_etf = sales_info['monthly']['acoes+etfs'][month]
+        has_surpassed_limit = current_acoes_etf['total_sales'] >= TAX_EXEMPT_SALE_LIMIT
+        current_acoes_etf['should_pay_taxes'] = has_surpassed_limit and current_acoes_etf['aggregated_profits'] > 0
+
+        if sale['type'] == 'etf' or sale['type'] == 'acao' and (has_surpassed_limit or not sale['is_profit']):
+            month = sale['date'].month
+            current_acoes_etf['aggregated_profits'] += sale['profit']
+            current_acoes_etf['dedo_duro'] += -sale['value'] * Decimal(DEDO_DURO_MULTIPLIER)
+        elif sale['type'] == 'acao' and sale['is_profit']:
             acoes_sales_value += -sale['value']
             acoes_aggregated_profits += sale['profit']
-
-        # TODO: unificar blocos abaixo?
-        elif sale['type'] == 'etf' or sale['type'] == 'acao' and not sale['is_profit']:
-            month = sale['date'].month
-            current = sales_info['monthly']['acoes+etfs'][month]
-
-            current['aggregated_results'] += sale['profit']
-            current['total_sales'] += -sale['value']
-            current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
-
-            sales_info['monthly']['acoes+etfs'][month] = current
         elif sale['type'] == 'fii':
             month = sale['date'].month
             current = sales_info['monthly']['fiis'][month]
 
-            current['aggregated_results'] += sale['profit']
+            current['aggregated_profits'] += sale['profit']
+            current['dedo_duro'] += -sale['value'] * Decimal(DEDO_DURO_MULTIPLIER)
             current['total_sales'] += -sale['value']
-            current['dedo_duro'] += -sale['value'] * Decimal(0.00005)
+        else:
+            raise Exception("Unexpected flow")
 
-            sales_info['monthly']['fiis'][month] = current
-
-
-    acoes_dedo_duro = acoes_sales_value * Decimal(0.00005)
+    acoes_dedo_duro = acoes_sales_value * Decimal(DEDO_DURO_MULTIPLIER)
     acoes_aggregated_profits -= acoes_dedo_duro
 
     sales_info['aggregated']['acoes']['aggregated_profits'] = acoes_aggregated_profits
@@ -463,7 +468,7 @@ def main():
         print("Operações comuns/Day-trade - Mercado à vista")
         print("Venda de ações com prejuízo, vendas em mês com mais de 20k ou vendas de ETFs")
         for key in sales_info['monthly']['acoes+etfs'].keys():
-            resultado = sales_info['monthly']['acoes+etfs'][key]['aggregated_results']
+            resultado = sales_info['monthly']['acoes+etfs'][key]['aggregated_profits']
             ir_fonte = sales_info['monthly']['acoes+etfs'][key]['dedo_duro']
 
             if resultado != 0:
@@ -477,7 +482,7 @@ def main():
         print("***")
         print("Operações FIIs")
         for key in sales_info['monthly']['fiis'].keys():
-            resultado = sales_info['monthly']['fiis'][key]['aggregated_results']
+            resultado = sales_info['monthly']['fiis'][key]['aggregated_profits']
             ir_fonte = sales_info['monthly']['fiis'][key]['dedo_duro']
 
             if resultado != 0:
