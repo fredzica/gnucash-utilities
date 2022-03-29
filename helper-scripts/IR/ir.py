@@ -67,6 +67,7 @@ def extract_sales_info(sales):
             month = sale['date'].month
             sales_info['monthly']['acoes+etfs'][month]['total_sales'] += -sale['value']
 
+    # calculating the rest
     for sale in sales:
         month = sale['date'].month
         current_acoes_etf = sales_info['monthly']['acoes+etfs'][month]
