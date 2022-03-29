@@ -99,6 +99,10 @@ def extract_sales_info(sales):
     return sales_info
 
 
+def sorted_splits_by_date(account):
+    return sorted(account.splits, key=lambda x: x.transaction.post_date)
+
+
 def collect_crypto(book, date_filter):
     cryptos_account = book.accounts(name='Crypto')
     children = cryptos_account.children
@@ -111,7 +115,7 @@ def collect_crypto(book, date_filter):
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
         transaction_date = None
-        for split in sorted(crypto_account.splits, key=lambda x: x.transaction.post_date):
+        for split in sorted_splits_by_date(crypto_account):
             if split.transaction.post_date <= date_filter:
 
                 quantity += Decimal(split.quantity)
@@ -167,7 +171,7 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
         transaction_date = None
-        for split in sorted(acao_account.splits, key=lambda x: x.transaction.post_date):
+        for split in sorted_splits_by_date(acao_account):
             if split.transaction.post_date <= date_filter:
                 held_during_filtered_period.add(acao_account.name)
 
@@ -251,7 +255,7 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
         quantity_purchases = Decimal(0)
         transaction_date = None
         day_usdbrl = None
-        for split in sorted(stock_account.splits, key=lambda x: x.transaction.post_date):
+        for split in sorted_splits_by_date(stock_account):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
@@ -361,7 +365,7 @@ def collect_bonificacoes(book, minimum_date, maximum_date):
     account = book.accounts(name='Bonificações')
 
     bonificacoes = []
-    for split in sorted(account.splits, key=lambda x: x.transaction.post_date):
+    for split in sorted_splits_by_date(account):
         if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
             bonificacoes.append(ledger(split.transaction))
 
