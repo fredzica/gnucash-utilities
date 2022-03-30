@@ -103,77 +103,20 @@ def sorted_splits_by_date(account):
     return sorted(account.splits, key=lambda x: x.transaction.post_date)
 
 
-def collect_crypto(book, date_filter):
-    cryptos_account = book.accounts(name='Crypto')
-    children = cryptos_account.children
-
-    crypto = []
-    for crypto_account in children:
-        quantity = Decimal(0)
-
-        price_avg = Decimal(0)
-        value_purchases = Decimal(0)
-        quantity_purchases = Decimal(0)
-        transaction_date = None
-        for split in sorted_splits_by_date(crypto_account):
-            if split.transaction.post_date <= date_filter:
-
-                quantity += Decimal(split.quantity)
-                transaction_date = split.transaction.post_date
-
-                if split.value > 0:
-                    value_purchases += Decimal(split.value)
-                    quantity_purchases += Decimal(split.quantity)
-                    price_avg = value_purchases/quantity_purchases
-                elif split.value == 0:
-                    raise Exception("Unexpected crypto split", split.transaction.post_date, crypto_account.name)
-
-                # avg should go back to zero if everything was sold at some point
-                sold_all = quantity == 0
-                if sold_all:
-                    price_avg = Decimal(0)
-                    value_purchases = Decimal(0)
-                    quantity_purchases = Decimal(0)
-
-        if quantity > 0:
-            metadata = extract_metadata(crypto_account)
-
-            crypto.append({
-                    'name': crypto_account.name,
-                    'quantity': quantity,
-                    'value': price_avg * quantity,
-                    'price_avg': price_avg,
-                    'value_purchases': value_purchases,
-                    'quantity_purchases': quantity_purchases,
-                    'last_transaction_date': transaction_date,
-                    'metadata': metadata
-            })
-
-        elif quantity < 0:
-            raise Exception("The stock {} has a negative quantity {}!".format(crypto_account.name, quantity))
-
-    return crypto
-
-
-def collect_bens_direitos_brasil(book, date_filter, minimum_date):
-    acoes_account = book.accounts(name='Ações')
-    fiis_account = book.accounts(name='FIIs')
-    children = acoes_account.children + fiis_account.children
-
+def collect_bens_direitos(children, date_filter, minimum_date = None):
     sales = []
-    acoes = []
+    bens = []
     held_during_filtered_period = set()
-    for acao_account in children:
+    for account in children:
 
         quantity = Decimal(0)
-
         price_avg = Decimal(0)
         value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
         transaction_date = None
-        for split in sorted_splits_by_date(acao_account):
+        for split in sorted_splits_by_date(account):
             if split.transaction.post_date <= date_filter:
-                held_during_filtered_period.add(acao_account.name)
+                held_during_filtered_period.add(account.name)
 
                 quantity += Decimal(split.quantity)
                 transaction_date = split.transaction.post_date
@@ -183,30 +126,31 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
-                elif split.value < 0 and split.transaction.post_date >= minimum_date:
-                    is_transfer = split.quantity == 0
-                    if is_transfer:
-                        value_purchases += Decimal(split.value)
-                        price_avg = value_purchases/quantity_purchases
-                    else:
-                        sold_price = split.value/split.quantity
-                        is_profit = sold_price > price_avg
-                        positive_quantity = -split.quantity
-                        profit = sold_price * positive_quantity - price_avg * positive_quantity
+                elif minimum_date is not None:
+                    if split.value < 0 and split.transaction.post_date >= minimum_date:
+                        is_transfer = split.quantity == 0
+                        if is_transfer:
+                            value_purchases += Decimal(split.value)
+                            price_avg = value_purchases/quantity_purchases
+                        else:
+                            sold_price = split.value/split.quantity
+                            is_profit = sold_price > price_avg
+                            positive_quantity = -split.quantity
+                            profit = sold_price * positive_quantity - price_avg * positive_quantity
 
-                        sales.append({
-                            'name': acao_account.name,
-                            'type': extract_metadata(acao_account)['type'],
-                            'date': split.transaction.post_date,
-                            'sold_price': sold_price,
-                            'quantity': split.quantity,
-                            'value': split.value,
-                            'price_avg': price_avg,
-                            'is_profit': is_profit,
-                            'profit': profit
-                        })
-                elif split.transaction.post_date >= minimum_date:
-                    raise Exception("Split wasn't recognized", acao_account.name, split.transaction.post_date)
+                            sales.append({
+                                'name': account.name,
+                                'type': extract_metadata(account)['type'],
+                                'date': split.transaction.post_date,
+                                'sold_price': sold_price,
+                                'quantity': split.quantity,
+                                'value': split.value,
+                                'price_avg': price_avg,
+                                'is_profit': is_profit,
+                                'profit': profit
+                            })
+                    elif split.transaction.post_date >= minimum_date:
+                        raise Exception("Split wasn't recognized", account.name, split.transaction.post_date)
 
                 # avg should go back to zero if everything was sold at some point
                 sold_all = quantity == 0
@@ -217,14 +161,14 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
 
                     sold_before_period_start = split.transaction.post_date <= minimum_date
                     if sold_before_period_start:
-                        held_during_filtered_period.remove(acao_account.name)
+                        held_during_filtered_period.remove(account.name)
 
 
         if quantity > 0:
-            metadata = extract_metadata(acao_account)
+            metadata = extract_metadata(account)
 
-            acoes.append({
-                    'name': acao_account.name,
+            bens.append({
+                    'name': account.name,
                     'quantity': quantity,
                     'value': price_avg * quantity,
                     'price_avg': price_avg,
@@ -235,9 +179,25 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
             })
 
         elif quantity < 0:
-            raise Exception("The stock {} has a negative quantity {}!".format(acao_account.name, quantity))
+            raise Exception("The stock {} has a negative quantity {}!".format(account.name, quantity))
 
-    return acoes, sales, held_during_filtered_period
+    return bens, sales, held_during_filtered_period
+
+
+def collect_crypto(book, date_filter):
+    cryptos_account = book.accounts(name='Crypto')
+    children = cryptos_account.children
+
+    crypto, _, _ = collect_bens_direitos(children, date_filter)
+    return crypto
+
+
+def collect_bens_direitos_brasil(book, date_filter, minimum_date):
+    acoes_account = book.accounts(name='Ações')
+    fiis_account = book.accounts(name='FIIs')
+    children = acoes_account.children + fiis_account.children
+
+    return collect_bens_direitos(children, date_filter, minimum_date)
 
 
 def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
