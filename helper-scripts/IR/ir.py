@@ -263,6 +263,7 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
 
     return stocks
 
+
 def collect_proventos(book, minimum_date, maximum_date):
     dividendos = book.accounts(name='Dividendos').children
     jcp = book.accounts(name='JCP').children
@@ -400,7 +401,7 @@ def main():
             print("Grupo:", metadata['grupo_bem_direito'])
             print("Código:", metadata['codigo_bem_direito'])
             print("Localização: EUA")
-            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Moeda originariamente nacional. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
             print("Situação R$:", round(stock['real_value'], 2))
             print("***")
 
