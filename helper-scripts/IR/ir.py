@@ -264,6 +264,16 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
     return stocks
 
 
+def get_year_last_usdbrl_bid_quote(quotes_by_date, year):
+    day = 31
+    while True:
+        try:
+            date = "{}12{}".format(day, year)
+            return quotes_by_date[date]['bid']
+        except KeyError:
+            day -= 1
+
+
 def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_filter):
     account = book.accounts(name='Conta no Charles Schwab')
 
@@ -280,8 +290,8 @@ def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_f
         else:
             raise Exception("Unsupported currency in the brokerage account history", currency)
 
-    date = "3112" + year_filter
-    real_value = quotes_by_date[date]['bid'] * dollar_value
+    usdbrl_quote = get_year_last_usdbrl_bid_quote(quotes_by_date, year_filter)
+    real_value = usdbrl_quote * dollar_value
 
     return dollar_value, real_value
 
