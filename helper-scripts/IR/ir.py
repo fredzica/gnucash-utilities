@@ -13,6 +13,7 @@ pp = pprint.PrettyPrinter(indent=2)
 DEDO_DURO_MULTIPLIER = Decimal(0.00005)
 ACOES_ETF_TAX_MULTIPLIER = Decimal(0.15)
 FII_TAX_MULTIPLIER = Decimal(0.20)
+US_DIVIDEND_TAX_MULTIPLIER = Decimal(0.30)
 TAX_EXEMPT_SALE_LIMIT = 20000
 
 
@@ -339,7 +340,29 @@ def collect_proventos_fiis(book, minimum_date, maximum_date):
     return proventos
 
 
-def collect_us_dividends(book, minimum_date, maximum_date):
+def get_us_dividend_usdbrl_quotes(quotes_by_date, year):
+    quotes_by_month = {}
+    for month in range(1, 13):
+        # retrieves the last available usdbrl quote from the first half of the previous month
+        day = 15
+        found_year = year
+        previous_month = month - 1
+        if month == 1:
+            found_year = year - 1
+            previous_month =  12
+
+        while day > 0:
+            date = "{:>02}{:>02}{}".format(day, previous_month, found_year)
+            try:
+                quotes_by_month[month] = quotes_by_date[date]['bid']
+                break
+            except KeyError:
+                day -= 1
+
+    return quotes_by_month
+
+
+def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
     monthly_dividends = {}
     for dividend_account in book.accounts(name='US Dividends').children:
         for split in dividend_account.splits:
@@ -351,7 +374,22 @@ def collect_us_dividends(book, minimum_date, maximum_date):
 
                 monthly_dividends[month] += -split.value
 
-    return monthly_dividends
+    all_values = {}
+    paid_tax = Decimal(0)
+    for month in monthly_dividends.keys():
+        dollar_net_value = monthly_dividends[month]
+        dollar_gross_value = dollar_net_value/Decimal(1 - US_DIVIDEND_TAX_MULTIPLIER)
+        real_gross_value = bid_quotes_by_month[month] * dollar_gross_value
+
+        all_values[month] = {
+            'dollar_net_value': dollar_net_value,
+            'dollar_gross_value': dollar_gross_value,
+            'real_gross_value': real_gross_value
+        }
+
+        paid_tax += real_gross_value * US_DIVIDEND_TAX_MULTIPLIER
+
+    return paid_tax, all_values
 
 
 def collect_bonificacoes(book, minimum_date, maximum_date):
@@ -448,7 +486,6 @@ def main():
         print("Discriminação: US$ {} em conta na corretora Charles Schwab. Número da conta: [preencher aqui]".format(brokerage_dollar_value))
         print("Situação R$:", round(brokerage_real_value, 2))
         print("***")
-
 
         cryptos = collect_crypto(book, maximum_date_filter)
         for crypto in cryptos:
@@ -553,10 +590,13 @@ def main():
             pp.pprint(proventos)
         print("******")
         print("Dividendos no exterior")
-        us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter)
+
+        bid_quotes_by_month = get_us_dividend_usdbrl_quotes(quotes_by_date, int(year_filter))
+        us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, bid_quotes_by_month)
 
         pp.pprint(us_dividends)
         if is_debug:
+            pp.pprint(bid_quotes_by_month)
             pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
