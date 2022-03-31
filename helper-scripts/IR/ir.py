@@ -264,6 +264,28 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
     return stocks
 
 
+def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_filter):
+    account = book.accounts(name='Conta no Charles Schwab')
+
+    dollar_value = Decimal(0)
+    for split in sorted_splits_by_date(account):
+        if split.transaction.post_date > maximum_date:
+            break
+
+        currency = split.transaction.currency.mnemonic
+        if currency == 'USD':
+            dollar_value += split.value
+        elif currency == 'BRL':
+            dollar_value += split.quantity
+        else:
+            raise Exception("Unsupported currency in the brokerage account history", currency)
+
+    date = "3112" + year_filter
+    real_value = quotes_by_date[date]['bid'] * dollar_value
+
+    return dollar_value, real_value
+
+
 def collect_proventos(book, minimum_date, maximum_date):
     dividendos = book.accounts(name='Dividendos').children
     jcp = book.accounts(name='JCP').children
@@ -407,6 +429,16 @@ def main():
 
             if is_debug:
                 pp.pprint(stock)
+
+        brokerage_dollar_value, brokerage_real_value = collect_brokerage_account_balance(book, maximum_date_filter, quotes_by_date, year_filter)
+        print("Conta na corretora no exterior")
+        print("Grupo: 06")
+        print("Código: 01", )
+        print("Localização: EUA")
+        print("Discriminação: US$ {} em conta na corretora Charles Schwab. Número da conta: [preencher aqui]".format(brokerage_dollar_value))
+        print("Situação R$:", round(brokerage_real_value, 2))
+        print("***")
+
 
         cryptos = collect_crypto(book, maximum_date_filter)
         for crypto in cryptos:
