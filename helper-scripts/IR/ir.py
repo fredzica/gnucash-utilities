@@ -374,8 +374,8 @@ def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
                 monthly_dividends[month] += -split.value
 
     all_values = {}
-    paid_tax = Decimal(0)
-    for month in monthly_dividends.keys():
+    paid_tax_brl = Decimal(0)
+    for month in sorted(monthly_dividends.keys()):
         dollar_net_value = monthly_dividends[month]
         dollar_gross_value = dollar_net_value/Decimal(1 - US_DIVIDEND_TAX_MULTIPLIER)
         real_gross_value = bid_quotes_by_month[month] * dollar_gross_value
@@ -386,9 +386,9 @@ def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
             'real_gross_value': real_gross_value
         }
 
-        paid_tax += real_gross_value * US_DIVIDEND_TAX_MULTIPLIER
+        paid_tax_brl += real_gross_value * US_DIVIDEND_TAX_MULTIPLIER
 
-    return paid_tax, all_values
+    return paid_tax_brl, all_values
 
 
 def collect_bonificacoes(book, minimum_date, maximum_date):
@@ -588,14 +588,24 @@ def main():
         if is_debug:
             pp.pprint(proventos)
         print("******")
+
         print("Dividendos no exterior")
-
         bid_quotes_by_month = get_us_dividend_usdbrl_quotes(quotes_by_date, int(year_filter))
-        us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, bid_quotes_by_month)
+        paid_tax, us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, bid_quotes_by_month)
 
-        pp.pprint(us_dividends)
+        print("Imposto Pago/Retido - Declarar na linha 02 (Rendimentos Tributáveis Recebidos de PF/Exterior)")
+        print("Valor em R$:", round(paid_tax, 2))
+        print("***")
+
+        for key in us_dividends:
+            dividend = us_dividends[key]
+            print("Mês", key)
+            print("Valor em R$:", round(dividend['real_gross_value'], 2))
+            print("***")
+
         if is_debug:
             pp.pprint(bid_quotes_by_month)
+            pp.pprint(paid_tax)
             pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
