@@ -265,14 +265,35 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter):
     return stocks
 
 
-def get_year_last_usdbrl_bid_quote(quotes_by_date, year):
-    day = 31
-    while True:
+def get_closest_available_quote(upper_limit_day, month, year, quotes_by_date):
+    day = upper_limit_day
+    while day > 0:
         try:
-            date = "{}12{}".format(day, year)
+            date = "{:>02}{:>02}{}".format(day, month, year)
             return quotes_by_date[date]['bid']
         except KeyError:
             day -= 1
+
+    raise Exception("Unexpected state: quote not found", day, month, year)
+
+
+def get_us_dividend_usdbrl_quotes(quotes_by_date, year):
+    quotes_by_month = {}
+    for month in range(1, 13):
+        # retrieves the last available usdbrl quote from the first half of the previous month
+        found_year = year
+        previous_month = month - 1
+        if month == 1:
+            found_year = year - 1
+            previous_month =  12
+
+        quotes_by_month[month] = get_closest_available_quote(15, previous_month, found_year, quotes_by_date)
+
+    return quotes_by_month
+
+
+def get_year_last_usdbrl_bid_quote(quotes_by_date, year):
+    return get_closest_available_quote(31, 12, year, quotes_by_date)
 
 
 def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_filter):
@@ -338,28 +359,6 @@ def collect_proventos_fiis(book, minimum_date, maximum_date):
             proventos[fonte_pagadora]['fiis'].append(name)
 
     return proventos
-
-
-def get_us_dividend_usdbrl_quotes(quotes_by_date, year):
-    quotes_by_month = {}
-    for month in range(1, 13):
-        # retrieves the last available usdbrl quote from the first half of the previous month
-        day = 15
-        found_year = year
-        previous_month = month - 1
-        if month == 1:
-            found_year = year - 1
-            previous_month =  12
-
-        while day > 0:
-            date = "{:>02}{:>02}{}".format(day, previous_month, found_year)
-            try:
-                quotes_by_month[month] = quotes_by_date[date]['bid']
-                break
-            except KeyError:
-                day -= 1
-
-    return quotes_by_month
 
 
 def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
