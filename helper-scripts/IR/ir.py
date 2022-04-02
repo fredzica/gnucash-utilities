@@ -238,10 +238,10 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
     for stock_account in children:
         quantity = Decimal(0)
 
-        dollar_price_avg = Decimal(0)
-        real_price_avg = Decimal(0)
-        dollar_value_purchases = Decimal(0)
-        real_value_purchases = Decimal(0)
+        usd_price_avg = Decimal(0)
+        brl_price_avg = Decimal(0)
+        usd_value_purchases = Decimal(0)
+        brl_value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
         transaction_date = None
         for split in sorted_splits_by_date(stock_account):
@@ -255,20 +255,20 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
                 if split.value > 0 or is_stock_split:
                     day_ask_usdbrl = quotes_by_date[date]['ask']
 
-                    dollar_value_purchases += Decimal(split.value)
-                    real_value_purchases += (day_ask_usdbrl * Decimal(split.value))
+                    usd_value_purchases += Decimal(split.value)
+                    brl_value_purchases += (day_ask_usdbrl * Decimal(split.value))
                     quantity_purchases += Decimal(split.quantity)
-                    dollar_price_avg = dollar_value_purchases/quantity_purchases
-                    real_price_avg = real_value_purchases/quantity_purchases
+                    usd_price_avg = usd_value_purchases/quantity_purchases
+                    brl_price_avg = brl_value_purchases/quantity_purchases
                 elif split.value < 0 and split.transaction.post_date >= minimum_date:
                     day_bid_usdbrl = quotes_by_date[date]['bid']
 
                     sold_price_usd = split.value/split.quantity
                     sold_price_brl = day_bid_usdbrl * sold_price_usd
-                    is_profit = sold_price_brl > real_price_avg
+                    is_profit = sold_price_brl > brl_price_avg
 
                     positive_quantity = -split.quantity
-                    profit = sold_price_brl * positive_quantity - real_price_avg * positive_quantity
+                    profit = sold_price_brl * positive_quantity - brl_price_avg * positive_quantity
 
                     value_brl = sold_price_brl * split.quantity
 
@@ -277,12 +277,12 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
                         'type': extract_metadata(stock_account)['type'],
                         'date': split.transaction.post_date,
                         'sold_price': sold_price_brl,
-                        'dollar_sold_price': sold_price_usd,
+                        'usd_sold_price': sold_price_usd,
                         'quantity': split.quantity,
-                        'dollar_value': split.value,
+                        'usd_value': split.value,
                         'value': value_brl,
-                        'price_avg': real_price_avg,
-                        'dollar_price_avg': dollar_price_avg,
+                        'price_avg': brl_price_avg,
+                        'usd_price_avg': usd_price_avg,
                         'is_profit': is_profit,
                         'profit': profit
                     })
@@ -291,10 +291,10 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
 
                 # avg should go back to zero if everything was sold at some point
                 if quantity == 0:
-                    dollar_price_avg = Decimal(0)
-                    real_price_avg = Decimal(0)
-                    dollar_value_purchases = Decimal(0)
-                    real_value_purchases = Decimal(0)
+                    usd_price_avg = Decimal(0)
+                    brl_price_avg = Decimal(0)
+                    usd_value_purchases = Decimal(0)
+                    brl_value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
 
         if quantity > 0:
@@ -303,12 +303,12 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
             stocks.append({
                     'name': stock_account.name,
                     'quantity': quantity,
-                    'dollar_value': dollar_price_avg * quantity,
-                    'real_value': real_price_avg * quantity,
-                    'dollar_price_avg': dollar_price_avg,
-                    'real_price_avg': real_price_avg,
-                    'dollar_value_purchases': dollar_value_purchases,
-                    'real_value_purchases': real_value_purchases,
+                    'usd_value': usd_price_avg * quantity,
+                    'brl_value': brl_price_avg * quantity,
+                    'usd_price_avg': usd_price_avg,
+                    'brl_price_avg': brl_price_avg,
+                    'usd_value_purchases': usd_value_purchases,
+                    'brl_value_purchases': brl_value_purchases,
                     'quantity_purchases': quantity_purchases,
                     'last_transaction_date': transaction_date,
                     'metadata': metadata
@@ -353,23 +353,23 @@ def get_year_last_usdbrl_bid_quote(quotes_by_date, year):
 def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_filter):
     account = book.accounts(name='Conta no Charles Schwab')
 
-    dollar_value = Decimal(0)
+    usd_value = Decimal(0)
     for split in sorted_splits_by_date(account):
         if split.transaction.post_date > maximum_date:
             break
 
         currency = split.transaction.currency.mnemonic
         if currency == 'USD':
-            dollar_value += split.value
+            usd_value += split.value
         elif currency == 'BRL':
-            dollar_value += split.quantity
+            usd_value += split.quantity
         else:
             raise Exception("Unsupported currency in the brokerage account history", currency)
 
     usdbrl_quote = get_year_last_usdbrl_bid_quote(quotes_by_date, year_filter)
-    real_value = usdbrl_quote * dollar_value
+    brl_value = usdbrl_quote * usd_value
 
-    return dollar_value, real_value
+    return usd_value, brl_value
 
 
 def collect_proventos(book, minimum_date, maximum_date):
@@ -430,17 +430,17 @@ def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
     all_values = {}
     paid_tax_brl = Decimal(0)
     for month in sorted(monthly_dividends.keys()):
-        dollar_net_value = monthly_dividends[month]
-        dollar_gross_value = dollar_net_value/Decimal(1 - US_DIVIDEND_TAX_MULTIPLIER)
-        real_gross_value = bid_quotes_by_month[month] * dollar_gross_value
+        usd_net_value = monthly_dividends[month]
+        usd_gross_value = usd_net_value/Decimal(1 - US_DIVIDEND_TAX_MULTIPLIER)
+        brl_gross_value = bid_quotes_by_month[month] * usd_gross_value
 
         all_values[month] = {
-            'dollar_net_value': dollar_net_value,
-            'dollar_gross_value': dollar_gross_value,
-            'real_gross_value': real_gross_value
+            'usd_net_value': usd_net_value,
+            'usd_gross_value': usd_gross_value,
+            'brl_gross_value': brl_gross_value
         }
 
-        paid_tax_brl += real_gross_value * US_DIVIDEND_TAX_MULTIPLIER
+        paid_tax_brl += brl_gross_value * US_DIVIDEND_TAX_MULTIPLIER
 
     return paid_tax_brl, all_values
 
@@ -524,20 +524,20 @@ def main():
             print("Grupo:", metadata['grupo_bem_direito'])
             print("Código:", metadata['codigo_bem_direito'])
             print("Localização: EUA")
-            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['dollar_value'], 2)))
-            print("Situação R$:", round(stock['real_value'], 2))
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['usd_value'], 2)))
+            print("Situação R$:", round(stock['brl_value'], 2))
             print("***")
 
             if is_debug:
                 pp.pprint(stock)
 
-        brokerage_dollar_value, brokerage_real_value = collect_brokerage_account_balance(book, maximum_date_filter, quotes_by_date, year_filter)
+        brokerage_usd_value, brokerage_brl_value = collect_brokerage_account_balance(book, maximum_date_filter, quotes_by_date, year_filter)
         print("Conta na corretora no exterior")
         print("Grupo: 06")
         print("Código: 01", )
         print("Localização: EUA")
-        print("Discriminação: US$ {} em conta na corretora Charles Schwab. Número da conta: [preencher aqui]".format(brokerage_dollar_value))
-        print("Situação R$:", round(brokerage_real_value, 2))
+        print("Discriminação: US$ {} em conta na corretora Charles Schwab. Número da conta: [preencher aqui]".format(brokerage_usd_value))
+        print("Situação R$:", round(brokerage_brl_value, 2))
         print("***")
 
         cryptos = collect_crypto(book, maximum_date_filter)
@@ -660,7 +660,7 @@ def main():
         for key in us_dividends:
             dividend = us_dividends[key]
             print("Mês", key)
-            print("Valor em R$:", round(dividend['real_gross_value'], 2))
+            print("Valor em R$:", round(dividend['brl_gross_value'], 2))
             print("***")
 
         if is_debug:
