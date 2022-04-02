@@ -14,7 +14,8 @@ DEDO_DURO_MULTIPLIER = Decimal(0.00005)
 ACOES_ETF_TAX_MULTIPLIER = Decimal(0.15)
 FII_TAX_MULTIPLIER = Decimal(0.20)
 US_DIVIDEND_TAX_MULTIPLIER = Decimal(0.30)
-TAX_EXEMPT_SALE_LIMIT = 20000
+TAX_EXEMPT_SALE_FOREIGN_LIMIT = 35000
+TAX_EXEMPT_SALE_DOMESTIC_LIMIT = 20000
 
 
 def extract_metadata(account):
@@ -38,9 +39,15 @@ def extract_metadata(account):
     return metadata
 
 
+def is_us_sale(sale):
+    return sale['type'] in ['us stock', 'us etf', 'reit']
+
+
+def is_br_acao_sale(sale):
+    return sale['type'] in ['acao', 'etf']
+
+
 def extract_sales_info(sales):
-    acoes_aggregated_profits = Decimal(0)
-    acoes_sales_value = Decimal(0)
     sales_info = {
             'aggregated': {
                 'us': {
@@ -53,50 +60,71 @@ def extract_sales_info(sales):
                 },
             'monthly': {
                 'fiis': {},
-                'acoes+etfs': {}
-                },
-            'debug': {}
-            }
+                'acoes+etfs': {},
+                'us': {}
+                }
+    }
 
     for i in range(1, 13):
         sales_info['monthly']['acoes+etfs'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+        sales_info['monthly']['us'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0)}
         sales_info['monthly']['fiis'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
 
     # calculating the total monthly sales
     for sale in sales:
-        if sale['type'] == 'acao' or sale['type'] == 'etf':
+        if is_br_acao_sale(sale):
             month = sale['date'].month
             sales_info['monthly']['acoes+etfs'][month]['total_sales'] += -sale['value']
+        elif is_us_sale(sale):
+            month = sale['date'].month
+            sales_info['monthly']['us'][month]['total_sales'] += -sale['value']
 
     # calculating the rest
+    acoes_aggregated_profits = Decimal(0)
+    acoes_sales_value = Decimal(0)
+    us_sales_value = Decimal(0)
+    us_aggregated_profits = Decimal(0)
     for sale in sales:
         month = sale['date'].month
-        current_acoes_etf = sales_info['monthly']['acoes+etfs'][month]
-        has_surpassed_limit = current_acoes_etf['total_sales'] >= TAX_EXEMPT_SALE_LIMIT
 
-        if sale['type'] == 'etf' or sale['type'] == 'acao' and (has_surpassed_limit or not sale['is_profit']):
-            month = sale['date'].month
-            current_acoes_etf['aggregated_profits'] += sale['profit']
-            current_acoes_etf['dedo_duro'] += -sale['value'] * DEDO_DURO_MULTIPLIER
-        elif sale['type'] == 'acao' and sale['is_profit']:
-            acoes_sales_value += -sale['value']
-            acoes_aggregated_profits += sale['profit']
-        elif sale['type'] == 'fii':
-            month = sale['date'].month
-            current = sales_info['monthly']['fiis'][month]
-
-            current['aggregated_profits'] += sale['profit']
-            current['dedo_duro'] += -sale['value'] * DEDO_DURO_MULTIPLIER
-            current['total_sales'] += -sale['value']
+        if is_us_sale(sale):
+            current_us = sales_info['monthly']['us'][month]
+            has_surpassed_limit = current_us['total_sales'] >= TAX_EXEMPT_SALE_FOREIGN_LIMIT
+            if has_surpassed_limit:
+                print("Limite de 35000 de vendas foi ultrapassado no mês {}. Valores para este mês não entram no cálculo e um eventual imposto deve ser pago através do GCAP".format(month))
+            else:
+                current_us['aggregated_profits'] += sale['profit']
+                us_sales_value += -sale['value']
+                us_aggregated_profits += sale['profit']
         else:
-            raise Exception("Unexpected flow", sale)
+            current_acoes_etf = sales_info['monthly']['acoes+etfs'][month]
+            has_surpassed_limit = current_acoes_etf['total_sales'] >= TAX_EXEMPT_SALE_DOMESTIC_LIMIT
+
+            if sale['type'] == 'etf' or sale['type'] == 'acao' and (has_surpassed_limit or not sale['is_profit']):
+                current_acoes_etf['aggregated_profits'] += sale['profit']
+                current_acoes_etf['dedo_duro'] += -sale['value'] * DEDO_DURO_MULTIPLIER
+            elif sale['type'] == 'acao' and sale['is_profit']:
+                acoes_sales_value += -sale['value']
+                acoes_aggregated_profits += sale['profit']
+            elif sale['type'] == 'fii':
+                current = sales_info['monthly']['fiis'][month]
+
+                current['aggregated_profits'] += sale['profit']
+                current['dedo_duro'] += -sale['value'] * DEDO_DURO_MULTIPLIER
+                current['total_sales'] += -sale['value']
+            else:
+                raise Exception("Unexpected flow", sale)
 
     acoes_dedo_duro = acoes_sales_value * DEDO_DURO_MULTIPLIER
     acoes_aggregated_profits -= acoes_dedo_duro
 
+    sales_info['aggregated']['us']['aggregated_profits'] = us_aggregated_profits
+    sales_info['aggregated']['us']['sales_value'] = us_sales_value
+
     sales_info['aggregated']['acoes']['aggregated_profits'] = acoes_aggregated_profits
+    sales_info['aggregated']['acoes']['acoes_sales_value'] = acoes_sales_value
     sales_info['aggregated']['acoes']['dedo_duro'] = acoes_dedo_duro
-    sales_info['debug']['acoes_sales_value'] = acoes_sales_value
+
     return sales_info
 
 
@@ -216,7 +244,6 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
         real_value_purchases = Decimal(0)
         quantity_purchases = Decimal(0)
         transaction_date = None
-        day_usdbrl = None
         for split in sorted_splits_by_date(stock_account):
             if split.transaction.post_date <= date_filter:
                 quantity += Decimal(split.quantity)
@@ -241,8 +268,9 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
                     is_profit = sold_price_brl > real_price_avg
 
                     positive_quantity = -split.quantity
-                    value_brl = sold_price_brl * positive_quantity
-                    profit = value_brl - real_price_avg * positive_quantity
+                    profit = sold_price_brl * positive_quantity - real_price_avg * positive_quantity
+
+                    value_brl = sold_price_brl * split.quantity
 
                     sales.append({
                         'name': stock_account.name,
@@ -254,6 +282,7 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
                         'dollar_value': split.value,
                         'value': value_brl,
                         'price_avg': real_price_avg,
+                        'dollar_price_avg': dollar_price_avg,
                         'is_profit': is_profit,
                         'profit': profit
                     })
@@ -281,7 +310,6 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
                     'dollar_value_purchases': dollar_value_purchases,
                     'real_value_purchases': real_value_purchases,
                     'quantity_purchases': quantity_purchases,
-                    'last_usdbrl_quote': day_usdbrl,
                     'last_transaction_date': transaction_date,
                     'metadata': metadata
             })
@@ -469,7 +497,7 @@ def main():
     with open_book(gnucash_db_path, readonly=True, do_backup=False, open_if_lock=True) as book:
         print('retrieving data before or equal than {}'.format(maximum_date_filter))
 
-        bens_direitos, all_sales, need_additional_data = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
+        bens_direitos, br_sales, need_additional_data = collect_bens_direitos_brasil(book, maximum_date_filter, minimum_date_filter)
         print("************* Bens e direitos *************")
         for bem_direito in sorted(bens_direitos, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = bem_direito['metadata']
@@ -486,7 +514,6 @@ def main():
                 pp.pprint(bem_direito)
 
         stock_sales, stocks = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter, minimum_date_filter)
-        pp.pprint(stock_sales)
         types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
         for stock in sorted(stocks, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = stock['metadata']
@@ -531,16 +558,22 @@ def main():
         print()
         print()
 
+        all_sales = br_sales + stock_sales
         sales_info = extract_sales_info(all_sales)
         if is_debug:
+            pp.pprint("sales_info")
             pp.pprint(sales_info)
+            pp.pprint("all_sales")
             pp.pprint(all_sales)
 
-        print("************* RV Agregado (exclui ETFs e FIIs) *************")
+        print("************* RV Agregado (exclui ETFs BR e FIIs) *************")
         print("A ser declarado em Rendimentos Isentos e Não tributáveis")
+
         acoes_aggregated_profit = sales_info['aggregated']['acoes']['aggregated_profits']
+        us_aggregated_profits = sales_info['aggregated']['us']['aggregated_profits']
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
+        print("5 - Ganho de capital na alienação de bem, direito ou conjunto de bens ou direitos da mesma natureza, alienados em um mesmo mês, de valor total de alienação até R$ 20.000,00, para ações alienadas no mercado de balcão, e R$ 35.000,00, nos demais casos (Lucro com venda no exterior): ", round(us_aggregated_profits, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
 
         print("**************************")
