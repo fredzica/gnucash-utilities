@@ -573,7 +573,7 @@ def main():
         us_aggregated_profits = sales_info['aggregated']['us']['aggregated_profits']
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
-        print("5 - Ganho de capital na alienação de bem, direito ou conjunto de bens ou direitos da mesma natureza, alienados em um mesmo mês, de valor total de alienação até R$ 20.000,00, para ações alienadas no mercado de balcão, e R$ 35.000,00, nos demais casos (Lucro com venda no exterior): ", round(us_aggregated_profits, 2))
+        print("5 - Ganho de capital na alienação de bem, direito ou conjunto de bens ou direitos da mesma natureza, alienados em um mesmo mês, de valor total de alienação até R$ 20.000,00, para ações alienadas no mercado de balcão, e R$ 35.000,00, nos demais casos (Lucro com venda no exterior) (Declarar apenas se for valor positivo): ", round(us_aggregated_profits, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
 
         print("**************************")
@@ -653,8 +653,7 @@ def main():
         bid_quotes_by_month = get_us_dividend_usdbrl_quotes(quotes_by_date, int(year_filter))
         paid_tax, us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, bid_quotes_by_month)
 
-        print("Imposto Pago/Retido - Declarar na linha 02 (Rendimentos Tributáveis Recebidos de PF/Exterior)")
-        print("Valor em R$:", round(paid_tax, 2))
+        print("Imposto Pago/Retido - Declarar na linha 02 (Imposto pago no exterior pelo titular e pelos dependentes):", round(paid_tax, 2))
         print("***")
 
         for key in us_dividends:
