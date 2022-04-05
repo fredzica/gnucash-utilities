@@ -132,11 +132,13 @@ def sorted_splits_by_date(account):
     return sorted(account.splits, key=lambda x: x.transaction.post_date)
 
 
-def collect_bens_direitos(children, date_filter, minimum_date = None):
+def collect_bens_direitos(children, date_filter, quotes_by_date=None, is_us=False, minimum_date=None):
     sales = []
     bens = []
     held_during_filtered_period = set()
     for account in children:
+        brl_price_avg = Decimal(0)
+        brl_value_purchases = Decimal(0)
 
         quantity = Decimal(0)
         price_avg = Decimal(0)
@@ -151,23 +153,34 @@ def collect_bens_direitos(children, date_filter, minimum_date = None):
                 transaction_date = split.transaction.post_date
 
                 is_stock_split = split.value == 0 and split.action == 'Split'
+                format = "%d%m%Y"
+                date = split.transaction.post_date.strftime(format)
                 if split.value > 0 or is_stock_split:
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
+
+                    if is_us and quotes_by_date is not None:
+                        day_ask_usdbrl = quotes_by_date[date]['ask']
+                        brl_value_purchases += day_ask_usdbrl * Decimal(split.value)
+                        brl_price_avg = brl_value_purchases/quantity_purchases
                 elif minimum_date is not None:
                     if split.value < 0 and split.transaction.post_date >= minimum_date:
                         is_transfer = split.quantity == 0
                         if is_transfer:
                             value_purchases += Decimal(split.value)
                             price_avg = value_purchases/quantity_purchases
+
+                            if is_us and quotes_by_date is not None:
+                                day_bid_usdbrl = quotes_by_date[date]['bid']
+                                brl_value_purchases += Decimal(split.value) * day_bid_usdbrl
+                                brl_price_avg = brl_value_purchases/quantity_purchases
                         else:
                             sold_price = split.value/split.quantity
-                            is_profit = sold_price > price_avg
                             positive_quantity = -split.quantity
+                            is_profit = sold_price > price_avg
                             profit = sold_price * positive_quantity - price_avg * positive_quantity
-
-                            sales.append({
+                            sale = {
                                 'name': account.name,
                                 'type': extract_metadata(account)['type'],
                                 'date': split.transaction.post_date,
@@ -177,7 +190,20 @@ def collect_bens_direitos(children, date_filter, minimum_date = None):
                                 'price_avg': price_avg,
                                 'is_profit': is_profit,
                                 'profit': profit
-                            })
+                            }
+
+                            if is_us and quotes_by_date is not None:
+                                day_bid_usdbrl = quotes_by_date[date]['bid']
+                                sold_price_brl = day_bid_usdbrl * sold_price
+                                sale['sold_price_brl'] = sold_price_brl
+                                sale['is_profit'] = sold_price_brl > brl_price_avg
+                                sale['profit'] = sold_price_brl * positive_quantity - brl_price_avg * positive_quantity
+
+                                sale['brl_value'] = brl_price_avg * quantity
+                                sale['brl_price_avg'] =  brl_price_avg
+                                sale['brl_value_purchases'] = brl_value_purchases
+
+                            sales.append(sale)
                     elif split.transaction.post_date >= minimum_date:
                         raise Exception("Split wasn't recognized", account.name, split.transaction.post_date)
 
@@ -185,7 +211,9 @@ def collect_bens_direitos(children, date_filter, minimum_date = None):
                 sold_all = quantity == 0
                 if sold_all:
                     price_avg = Decimal(0)
+                    brl_price_avg = Decimal(0)
                     value_purchases = Decimal(0)
+                    brl_value_purchases = Decimal(0)
                     quantity_purchases = Decimal(0)
 
                     sold_before_period_start = split.transaction.post_date <= minimum_date
@@ -196,7 +224,7 @@ def collect_bens_direitos(children, date_filter, minimum_date = None):
         if quantity > 0:
             metadata = extract_metadata(account)
 
-            bens.append({
+            bem = {
                     'name': account.name,
                     'quantity': quantity,
                     'value': price_avg * quantity,
@@ -205,7 +233,14 @@ def collect_bens_direitos(children, date_filter, minimum_date = None):
                     'quantity_purchases': quantity_purchases,
                     'last_transaction_date': transaction_date,
                     'metadata': metadata
-            })
+            }
+
+            if is_us:
+                bem['brl_value'] = brl_price_avg * quantity
+                bem['brl_price_avg'] = brl_price_avg
+                bem['brl_value_purchases'] = brl_value_purchases
+
+            bens.append(bem)
 
         elif quantity < 0:
             raise Exception("The stock {} has a negative quantity {}!".format(account.name, quantity))
@@ -226,97 +261,14 @@ def collect_bens_direitos_brasil(book, date_filter, minimum_date):
     fiis_account = book.accounts(name='FIIs')
     children = acoes_account.children + fiis_account.children
 
-    return collect_bens_direitos(children, date_filter, minimum_date)
+    return collect_bens_direitos(children, date_filter, minimum_date=minimum_date)
 
 
 def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date):
     stocks_account = book.accounts(name='Ações no exterior')
     children = stocks_account.children
 
-    stocks = []
-    sales = []
-    for stock_account in children:
-        quantity = Decimal(0)
-
-        usd_price_avg = Decimal(0)
-        brl_price_avg = Decimal(0)
-        usd_value_purchases = Decimal(0)
-        brl_value_purchases = Decimal(0)
-        quantity_purchases = Decimal(0)
-        transaction_date = None
-        for split in sorted_splits_by_date(stock_account):
-            if split.transaction.post_date <= date_filter:
-                quantity += Decimal(split.quantity)
-                transaction_date = split.transaction.post_date
-
-                is_stock_split = split.value == 0 and split.action == 'Split'
-                format = "%d%m%Y"
-                date = split.transaction.post_date.strftime(format)
-                if split.value > 0 or is_stock_split:
-                    day_ask_usdbrl = quotes_by_date[date]['ask']
-
-                    usd_value_purchases += Decimal(split.value)
-                    brl_value_purchases += (day_ask_usdbrl * Decimal(split.value))
-                    quantity_purchases += Decimal(split.quantity)
-                    usd_price_avg = usd_value_purchases/quantity_purchases
-                    brl_price_avg = brl_value_purchases/quantity_purchases
-                elif split.value < 0 and split.transaction.post_date >= minimum_date:
-                    day_bid_usdbrl = quotes_by_date[date]['bid']
-
-                    sold_price_usd = split.value/split.quantity
-                    sold_price_brl = day_bid_usdbrl * sold_price_usd
-                    is_profit = sold_price_brl > brl_price_avg
-
-                    positive_quantity = -split.quantity
-                    profit = sold_price_brl * positive_quantity - brl_price_avg * positive_quantity
-
-                    value_brl = sold_price_brl * split.quantity
-
-                    sales.append({
-                        'name': stock_account.name,
-                        'type': extract_metadata(stock_account)['type'],
-                        'date': split.transaction.post_date,
-                        'sold_price': sold_price_brl,
-                        'usd_sold_price': sold_price_usd,
-                        'quantity': split.quantity,
-                        'usd_value': split.value,
-                        'value': value_brl,
-                        'price_avg': brl_price_avg,
-                        'usd_price_avg': usd_price_avg,
-                        'is_profit': is_profit,
-                        'profit': profit
-                    })
-                elif split.transaction.post_date >= minimum_date:
-                    raise Exception("Split wasn't recognized", stock_account.name, split.transaction.post_date)
-
-                # avg should go back to zero if everything was sold at some point
-                if quantity == 0:
-                    usd_price_avg = Decimal(0)
-                    brl_price_avg = Decimal(0)
-                    usd_value_purchases = Decimal(0)
-                    brl_value_purchases = Decimal(0)
-                    quantity_purchases = Decimal(0)
-
-        if quantity > 0:
-            metadata = extract_metadata(stock_account)
-
-            stocks.append({
-                    'name': stock_account.name,
-                    'quantity': quantity,
-                    'usd_value': usd_price_avg * quantity,
-                    'brl_value': brl_price_avg * quantity,
-                    'usd_price_avg': usd_price_avg,
-                    'brl_price_avg': brl_price_avg,
-                    'usd_value_purchases': usd_value_purchases,
-                    'brl_value_purchases': brl_value_purchases,
-                    'quantity_purchases': quantity_purchases,
-                    'last_transaction_date': transaction_date,
-                    'metadata': metadata
-            })
-        elif quantity < 0:
-            raise Exception("The stock {} has a negative quantity {}!".format(stock_account.name, quantity))
-
-    return sales, stocks
+    return collect_bens_direitos(children, date_filter, is_us=True, quotes_by_date=quotes_by_date, minimum_date=minimum_date)
 
 
 def get_closest_available_quote(upper_limit_day, month, year, quotes_by_date):
@@ -513,7 +465,8 @@ def main():
             if is_debug:
                 pp.pprint(bem_direito)
 
-        stock_sales, stocks = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter, minimum_date_filter)
+        stocks, stock_sales, _ = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter, minimum_date_filter)
+
         types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
         for stock in sorted(stocks, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
             metadata = stock['metadata']
@@ -524,7 +477,7 @@ def main():
             print("Grupo:", metadata['grupo_bem_direito'])
             print("Código:", metadata['codigo_bem_direito'])
             print("Localização: EUA")
-            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['usd_value'], 2)))
+            print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['value'], 2)))
             print("Situação R$:", round(stock['brl_value'], 2))
             print("***")
 
