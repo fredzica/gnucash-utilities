@@ -106,8 +106,9 @@ def extract_sales_info(sales):
             current_us = sales_info['monthly']['us'][month]
 
             has_surpassed_limit = current_us['total_sales'] >= TAX_EXEMPT_SALE_FOREIGN_LIMIT
-            if not has_surpassed_limit:
+            if has_surpassed_limit:
                 current_us['aggregated_profits'] += sale['profit']
+            else:
                 us_sales_value += -sale['value']
                 us_aggregated_profits += sale['profit']
         else:
@@ -581,8 +582,19 @@ def main():
                 print("    IR Fonte", round(ir_fonte, 2))
                 print("    Valor do imposto", round(imposto, 2))
 
-        print("**************************")
+        print("***")
+        print("Vendas no exterior que geraram impostos")
+        for key in sales_info['monthly']['us'].keys():
+            current = sales_info['monthly']['us'][key]
+            resultado = current['aggregated_profits']
+            imposto = current['imposto']
 
+            if resultado != 0:
+                print("Mês:", key)
+                print("    Resultado", round(resultado, 2))
+                print("    Valor do imposto", round(imposto, 2))
+
+        print("**************************")
 
         print("************* Rendimentos *************")
         proventos = collect_proventos(book, minimum_date_filter, maximum_date_filter)
