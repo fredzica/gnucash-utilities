@@ -72,11 +72,10 @@ def extract_sales_info(sales):
 
     # calculating the total monthly sales
     for sale in sales:
+        month = sale['date'].month
         if is_br_acao_sale(sale):
-            month = sale['date'].month
             sales_info['monthly']['acoes+etfs'][month]['total_sales'] += -sale['value']
         elif is_us_sale(sale):
-            month = sale['date'].month
             sales_info['monthly']['us'][month]['total_sales'] += -sale['value']
 
     # calculating the rest
