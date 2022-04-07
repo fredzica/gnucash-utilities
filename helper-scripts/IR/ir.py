@@ -47,6 +47,22 @@ def is_br_acao_sale(sale):
     return sale['type'] in ['acao', 'etf']
 
 
+def add_taxes(sales_info):
+    for i in range(1, 13):
+        acoes_etfs = sales_info['monthly']['acoes+etfs'][i]
+        us = sales_info['monthly']['us'][i]
+        fiis = sales_info['monthly']['fiis'][i]
+
+        if acoes_etfs['aggregated_profits'] > 0:
+            acoes_etfs['imposto'] = acoes_etfs['aggregated_profits'] * ACOES_ETF_TAX_MULTIPLIER
+
+        if us['aggregated_profits'] > 0:
+            us['imposto'] = us['aggregated_profits'] * ACOES_ETF_TAX_MULTIPLIER
+
+        if fiis['aggregated_profits'] > 0:
+            fiis['imposto'] = fiis['aggregated_profits'] * FII_TAX_MULTIPLIER
+
+
 def extract_sales_info(sales):
     sales_info = {
             'aggregated': {
@@ -66,9 +82,9 @@ def extract_sales_info(sales):
     }
 
     for i in range(1, 13):
-        sales_info['monthly']['acoes+etfs'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
-        sales_info['monthly']['us'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0)}
-        sales_info['monthly']['fiis'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0)}
+        sales_info['monthly']['acoes+etfs'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0), 'imposto': Decimal(0)}
+        sales_info['monthly']['us'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'imposto': Decimal(0)}
+        sales_info['monthly']['fiis'][i] = {'aggregated_profits': Decimal(0), 'total_sales': Decimal(0), 'dedo_duro': Decimal(0), 'imposto': Decimal(0)}
 
     # calculating the total monthly sales
     for sale in sales:
@@ -88,10 +104,9 @@ def extract_sales_info(sales):
 
         if is_us_sale(sale):
             current_us = sales_info['monthly']['us'][month]
+
             has_surpassed_limit = current_us['total_sales'] >= TAX_EXEMPT_SALE_FOREIGN_LIMIT
-            if has_surpassed_limit:
-                print("Limite de 35000 de vendas foi ultrapassado no mês {}. Valores para este mês não entram no cálculo e um eventual imposto deve ser pago através do GCAP".format(month))
-            else:
+            if not has_surpassed_limit:
                 current_us['aggregated_profits'] += sale['profit']
                 us_sales_value += -sale['value']
                 us_aggregated_profits += sale['profit']
@@ -113,6 +128,8 @@ def extract_sales_info(sales):
                 current['total_sales'] += -sale['value']
             else:
                 raise Exception("Unexpected flow", sale)
+
+    add_taxes(sales_info)
 
     acoes_dedo_duro = acoes_sales_value * DEDO_DURO_MULTIPLIER
     acoes_aggregated_profits -= acoes_dedo_duro
@@ -423,10 +440,6 @@ def retrieve_usdbrl_quotes(quotes_csv_path):
     return quotes_by_date
 
 
-def calculate_tax_value(amount, multiplier):
-    return round(amount * multiplier, 2) if amount > 0 else 0
-
-
 def main():
     if len(sys.argv) < 4:
         print('Wrong number of arguments!')
@@ -542,13 +555,13 @@ def main():
             current = sales_info['monthly']['acoes+etfs'][key]
             resultado = current['aggregated_profits']
             ir_fonte = current['dedo_duro']
+            imposto = current['imposto']
 
             if resultado != 0:
-                imposto = calculate_tax_value(resultado, ACOES_ETF_TAX_MULTIPLIER)
                 print("Mês:", key)
                 print("    Resultado", round(resultado, 2))
                 print("    IR Fonte", round(ir_fonte, 2))
-                print("    Valor do imposto", imposto)
+                print("    Valor do imposto", round(imposto, 2))
 
         print("***")
         print("Operações FIIs")
@@ -557,15 +570,16 @@ def main():
             pp.pprint(sales_info['monthly']['fiis'])
 
         for key in sales_info['monthly']['fiis'].keys():
-            resultado = sales_info['monthly']['fiis'][key]['aggregated_profits']
-            ir_fonte = sales_info['monthly']['fiis'][key]['dedo_duro']
+            current = sales_info['monthly']['fiis'][key]
+            resultado = current['aggregated_profits']
+            ir_fonte = current['dedo_duro']
+            imposto = current['imposto']
 
             if resultado != 0:
-                imposto = calculate_tax_value(resultado, FII_TAX_MULTIPLIER)
                 print("Mês:", key)
                 print("    Resultado", round(resultado, 2))
                 print("    IR Fonte", round(ir_fonte, 2))
-                print("    Valor do imposto", imposto)
+                print("    Valor do imposto", round(imposto, 2))
 
         print("**************************")
 
