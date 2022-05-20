@@ -1,24 +1,16 @@
 import sys
-import os
-import shutil
-import time
 
 import pprint
 pp = pprint.PrettyPrinter(indent=2)
 
 import csv
-import re
 from decimal import *
 from datetime import datetime
-from piecash import open_book, ledger, factories, Account, Transaction, Commodity, Split, GnucashException
+from piecash import open_book, ledger, Account, Transaction, Commodity, Split
 
 
 def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
-    # backing up the db file first
-    ms = time.time() * 1000.0
-    shutil.copy(gnucash_db_path, '{}.{}.schwab-importing'.format(gnucash_db_path, ms))
-
-    with open_book(gnucash_db_path, readonly=False) as book:
+    with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 
         print("Importing {} stock, {} dividend, {} transfer and {} purchase transactions".format(len(stocks), len(dividends), len(transfers), len(purchases)))

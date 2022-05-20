@@ -1,13 +1,11 @@
 import sys
 import os
-import shutil
-import time
 
 import csv
 import re
 from decimal import *
 from datetime import datetime
-from piecash import open_book, ledger, Account, Commodity, Transaction, Split, GnucashException
+from piecash import open_book, ledger, Account, Commodity, Transaction, Split
 
 folder_path = sys.argv[1]
 gnucash_db_path = sys.argv[2]
@@ -15,11 +13,7 @@ gnucash_db_path = sys.argv[2]
 # este script necessita das notas de corretagem salvas em csv com o delimitador ';'
 
 def write_to_gnucash(brokerage_statements):
-    # backing up the db file first
-    ms = time.time() * 1000.0
-    shutil.copy(gnucash_db_path, '{}.{}.inter-importing'.format(gnucash_db_path, ms))
-
-    with open_book(gnucash_db_path, readonly=False) as book:
+    with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         bank_account = book.accounts(name='Conta no Inter')
         sold_value = Decimal(0)
         bought_value = Decimal(0)
@@ -112,6 +106,7 @@ def write_to_gnucash(brokerage_statements):
 
         if sold_value >= 20000:
             print('*************** You sold more than 20000! Check if you need to pay taxes this month')
+
 
 def extract_date_from_liq(liq_string):
     splitted = liq_string.split()
