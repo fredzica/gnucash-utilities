@@ -9,11 +9,35 @@ from datetime import datetime
 from piecash import open_book, ledger, Account, Transaction, Commodity, Split
 
 
-def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
+def import_expense(brokerage_account, book, expense, expense_account_name=None):
+    value = Decimal(expense['value'])
+
+    date_split = expense['date'].split(' ')
+    date = datetime.strptime(date_split[0], "%m/%d/%Y")
+    description = expense['description']
+
+    if expense_account_name is None:
+        print("Enter the expense account for the purchase {} made on {} of ${}".format(description, date, value))
+        expense_account_name = input()
+
+    expense_account = book.accounts(name=expense_account_name, type='EXPENSE')
+    expense_transaction = Transaction(currency=brokerage_account.commodity,
+        description=description,
+        post_date=date.date(),
+        splits=[
+            Split(value=-value, account=expense_account),
+            Split(value=value, account=brokerage_account)
+        ]
+    )
+    print(ledger(expense_transaction))
+
+
+def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees):
     with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 
-        print("Importing {} stock, {} dividend, {} transfer and {} purchase transactions".format(len(stocks), len(dividends), len(transfers), len(purchases)))
+        print("Importing {} stock, {} dividend, {} transfer, {} purchase and {} adr fees transactions"
+              .format(len(stocks), len(dividends), len(transfers), len(purchases), len(adr_fees)))
 
         for stock in stocks:
             symbol = stock['symbol'].upper()
@@ -110,7 +134,8 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
                 book.flush()
 
             value = Decimal(dividend['value'])
-            date = datetime.strptime(dividend['date'], "%m/%d/%Y")
+            date_split = dividend['date'].split(' ')
+            date = datetime.strptime(date_split[0], "%m/%d/%Y")
             description = dividend['description']
 
             dividend_transaction = Transaction(currency=brokerage_account.commodity,
@@ -124,27 +149,13 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases):
             print(ledger(dividend_transaction))
 
         for purchase in purchases:
-            value = Decimal(purchase['value'])
+            import_expense(brokerage_account, book, purchase)
 
-            date_split = purchase['date'].split(' ')
-            date = datetime.strptime(date_split[0], "%m/%d/%Y")
-            description = purchase['description']
-
-            print("Enter the expense account for the purchase {} made on {} of ${}".format(description, date, value))
-            expense_account_name = input()
-            expense_account = book.accounts(name=expense_account_name, type='EXPENSE')
-            purchase_transaction = Transaction(currency=brokerage_account.commodity,
-                description=description,
-                post_date=date.date(),
-                splits=[
-                    Split(value=-value, account=expense_account),
-                    Split(value=value, account=brokerage_account)
-                ]
-            )
-            print(ledger(purchase_transaction))
+        for adr_fee in adr_fees:
+            import_expense(brokerage_account, book, adr_fee, expense_account_name='ADR Mgmt Fee')
 
         book.save()
-        
+
         sold_bought_balance = sum(stock['value'] for stock in stocks)
         print("Bought - sold stocks: ${}".format(sold_bought_balance))
 
@@ -160,6 +171,7 @@ def process_csv(csv_file):
     dividends = []
     transfers = []
     purchases = []
+    adr_fees = []
 
     reader = csv.DictReader(csv_file, delimiter = ',', quotechar='"')
     for row in reader:
@@ -189,7 +201,7 @@ def process_csv(csv_file):
                 'quantity': row['Quantity'],
                 'value': -amount,
             })
-        elif any(x in action.lower() for x in ['dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div']):
+        elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div']:
             dividends.append({
                 'date': date,
                 'description': symbol_description,
@@ -202,8 +214,15 @@ def process_csv(csv_file):
                 'description': description,
                 'value': amount
             })
-        elif 'security transfer' == action.lower():
-            print('Warning: Security transfer found. You should manually import it')
+        elif 'adr mgmt fee' == action.lower():
+            adr_fees.append({
+                'date': date,
+                'description': description,
+                'symbol': symbol,
+                'value': amount
+            })
+        elif action.lower() in ['unissued rights redemption', 'security transfer']:
+            print('Warning: {} found. You should manually import it'.format(action))
             pp.pprint(row)
         elif date.lower() == 'transactions total':
             # usually the last line of the report is this
@@ -211,7 +230,7 @@ def process_csv(csv_file):
         else:
             raise Exception("Unrecognizable row {}".format(row))
 
-    return (stocks, dividends, transfers, purchases)
+    return (stocks, dividends, transfers, purchases, adr_fees)
 
 
 def main():
@@ -226,7 +245,7 @@ def main():
         # skip first line
         next(csv_file)
 
-        stocks, dividends, transfers, purchases = process_csv(csv_file)
+        stocks, dividends, transfers, purchases, adr_fees = process_csv(csv_file)
         if only_check_csv:
             print("stocks")
             pp.pprint(stocks)
@@ -236,8 +255,10 @@ def main():
             pp.pprint(transfers)
             print("purchases")
             pp.pprint(purchases)
+            print("ADR fees")
+            pp.pprint(adr_fees)
         else:
-            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases)
+            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees)
 
 
 main()
