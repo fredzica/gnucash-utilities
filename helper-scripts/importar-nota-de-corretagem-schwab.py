@@ -32,12 +32,12 @@ def import_expense(brokerage_account, book, expense, expense_account_name=None):
     print(ledger(expense_transaction))
 
 
-def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees):
+def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes):
     with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 
         print("Importing {} stock, {} dividend, {} transfer, {} purchase and {} adr fees transactions"
-              .format(len(stocks), len(dividends), len(transfers), len(purchases), len(adr_fees)))
+              .format(len(stocks), len(dividends), len(transfers), len(purchases), len(adr_fees), len(foreign_taxes)))
 
         for stock in stocks:
             symbol = stock['symbol'].upper()
@@ -154,6 +154,9 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, a
         for adr_fee in adr_fees:
             import_expense(brokerage_account, book, adr_fee, expense_account_name='ADR Mgmt Fee')
 
+        for foreign_tax in foreign_taxes:
+            import_expense(brokerage_account, book, foreign_tax, expense_account_name='Foreign Tax Paid')
+
         book.save()
 
         sold_bought_balance = sum(stock['value'] for stock in stocks)
@@ -172,6 +175,7 @@ def process_csv(csv_file):
     transfers = []
     purchases = []
     adr_fees = []
+    foreign_taxes = []
 
     reader = csv.DictReader(csv_file, delimiter = ',', quotechar='"')
     for row in reader:
@@ -221,6 +225,13 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'value': amount
             })
+        elif 'foreign tax paid' == action.lower():
+            foreign_taxes.append({
+                'date': date,
+                'description': description,
+                'symbol': symbol,
+                'value': amount
+            })
         elif action.lower() in ['unissued rights redemption', 'security transfer']:
             print('Warning: {} found. You should manually import it'.format(action))
             pp.pprint(row)
@@ -230,7 +241,7 @@ def process_csv(csv_file):
         else:
             raise Exception("Unrecognizable row {}".format(row))
 
-    return (stocks, dividends, transfers, purchases, adr_fees)
+    return (stocks, dividends, transfers, purchases, adr_fees, foreign_taxes)
 
 
 def main():
@@ -245,7 +256,7 @@ def main():
         # skip first line
         next(csv_file)
 
-        stocks, dividends, transfers, purchases, adr_fees = process_csv(csv_file)
+        stocks, dividends, transfers, purchases, adr_fees, foreign_taxes = process_csv(csv_file)
         if only_check_csv:
             print("stocks")
             pp.pprint(stocks)
@@ -257,8 +268,10 @@ def main():
             pp.pprint(purchases)
             print("ADR fees")
             pp.pprint(adr_fees)
+            print("Foreign tax paid")
+            pp.pprint(foreign_taxes)
         else:
-            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees)
+            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes)
 
 
 main()
