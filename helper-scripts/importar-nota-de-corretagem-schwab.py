@@ -32,7 +32,26 @@ def import_expense(brokerage_account, book, expense, expense_account_name=None):
     print(ledger(expense_transaction))
 
 
-def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes):
+def import_income(brokerage_account, book, income, income_account_name):
+    value = Decimal(income['value'])
+
+    date_split = income['date'].split(' ')
+    date = datetime.strptime(date_split[0], "%m/%d/%Y")
+    description = income['description']
+
+    income_account = book.accounts(name=income_account_name, type='INCOME')
+    income_transaction = Transaction(currency=brokerage_account.commodity,
+        description=description,
+        post_date=date.date(),
+        splits=[
+            Split(value=-value, account=income_account),
+            Split(value=value, account=brokerage_account)
+        ]
+    )
+    print(ledger(income_transaction))
+
+
+def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments):
     with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 
@@ -157,6 +176,12 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, a
         for foreign_tax in foreign_taxes:
             import_expense(brokerage_account, book, foreign_tax, expense_account_name='Foreign Tax Paid')
 
+        for interest in account_interest:
+            import_income(brokerage_account, book, interest, expense_account_name='Schwab Account Interest')
+
+        for salary in salary_payments:
+            import_income(brokerage_account, book, salary, income_account_name='Salary')
+
         book.save()
 
         sold_bought_balance = sum(stock['value'] for stock in stocks)
@@ -176,6 +201,8 @@ def process_csv(csv_file):
     purchases = []
     adr_fees = []
     foreign_taxes = []
+    account_interest = []
+    salary_payments = []
 
     reader = csv.DictReader(csv_file, delimiter = ',', quotechar='"')
     for row in reader:
@@ -184,6 +211,7 @@ def process_csv(csv_file):
             break
 
         action = row['Action']
+        action_lower_case = action.lower()
         symbol = row['Symbol']
         description = "{}-{}".format(action, row['Description'])
         symbol_description = "{}-{}".format(description, symbol)
@@ -204,6 +232,12 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'quantity': row['Quantity'],
                 'value': -amount,
+            })
+        elif action.lower() == 'nra tax adj' and symbol == '':
+            account_interest.append({
+                'date': date,
+                'description': description,
+                'value': amount
             })
         elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div']:
             dividends.append({
@@ -232,6 +266,18 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'value': amount
             })
+        elif 'credit interest' == action.lower():
+            account_interest.append({
+                'date': date,
+                'description': description,
+                'value': amount
+            })
+        elif 'moneylink deposit' == action.lower():
+            salary_payments.append({
+                'date': date,
+                'description': description,
+                'value': amount
+            })
         elif action.lower() in ['unissued rights redemption', 'security transfer']:
             print('Warning: {} found. You should manually import it'.format(action))
             pp.pprint(row)
@@ -241,7 +287,7 @@ def process_csv(csv_file):
         else:
             raise Exception("Unrecognizable row {}".format(row))
 
-    return (stocks, dividends, transfers, purchases, adr_fees, foreign_taxes)
+    return (stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments)
 
 
 def main():
@@ -256,7 +302,7 @@ def main():
         # skip first line
         next(csv_file)
 
-        stocks, dividends, transfers, purchases, adr_fees, foreign_taxes = process_csv(csv_file)
+        stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments = process_csv(csv_file)
         if only_check_csv:
             print("stocks")
             pp.pprint(stocks)
@@ -271,7 +317,7 @@ def main():
             print("Foreign tax paid")
             pp.pprint(foreign_taxes)
         else:
-            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes)
+            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments)
 
 
 main()
