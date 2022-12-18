@@ -51,12 +51,14 @@ def import_income(brokerage_account, book, income, income_account_name):
     print(ledger(income_transaction))
 
 
-def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments):
+def write_to_gnucash(gnucash_db_path, contents):
     with open_book(gnucash_db_path, readonly=False, do_backup=True) as book:
         brokerage_account = book.accounts(name='Conta no Charles Schwab')
 
-        print("Importing {} stock, {} dividend, {} transfer, {} purchase and {} adr fees transactions"
-              .format(len(stocks), len(dividends), len(transfers), len(purchases), len(adr_fees), len(foreign_taxes)))
+        [stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments] = contents.values()
+
+        print("Importing {} stock, {} dividend, {} transfer, {} purchase, {} adr fees transactions, {} foreign_tax, {} account_interest and {} salary_payments"
+              .format(len(stocks), len(dividends), len(transfers), len(purchases), len(adr_fees), len(foreign_taxes), len(account_interest), len(salary_payments)))
 
         for stock in stocks:
             symbol = stock['symbol'].upper()
@@ -177,10 +179,10 @@ def write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, a
             import_expense(brokerage_account, book, foreign_tax, expense_account_name='Foreign Tax Paid')
 
         for interest in account_interest:
-            import_income(brokerage_account, book, interest, expense_account_name='Schwab Account Interest')
+            import_income(brokerage_account, book, interest, 'Schwab Account Interest')
 
         for salary in salary_payments:
-            import_income(brokerage_account, book, salary, income_account_name='Salary')
+            import_income(brokerage_account, book, salary, 'Salary')
 
         book.save()
 
@@ -287,7 +289,7 @@ def process_csv(csv_file):
         else:
             raise Exception("Unrecognizable row {}".format(row))
 
-    return (stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments)
+    return dict(stocks=stocks, dividends=dividends, transfers=transfers, purchases=purchases, adr_fees=adr_fees, foreign_taxes=foreign_taxes, account_interest=account_interest, salary_payments=salary_payments)
 
 
 def main():
@@ -302,22 +304,11 @@ def main():
         # skip first line
         next(csv_file)
 
-        stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments = process_csv(csv_file)
+        csv_content = process_csv(csv_file)
         if only_check_csv:
-            print("stocks")
-            pp.pprint(stocks)
-            print("dividends")
-            pp.pprint(dividends)
-            print("transfers")
-            pp.pprint(transfers)
-            print("purchases")
-            pp.pprint(purchases)
-            print("ADR fees")
-            pp.pprint(adr_fees)
-            print("Foreign tax paid")
-            pp.pprint(foreign_taxes)
+            pprint.pprint(csv_content)
         else:
-            write_to_gnucash(gnucash_db_path, stocks, dividends, transfers, purchases, adr_fees, foreign_taxes, account_interest, salary_payments)
+            write_to_gnucash(gnucash_db_path, csv_content)
 
 
 main()
