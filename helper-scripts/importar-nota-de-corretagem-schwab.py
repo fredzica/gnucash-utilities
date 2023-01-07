@@ -241,7 +241,7 @@ def process_csv(csv_file):
                 'description': description,
                 'value': amount
             })
-        elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div']:
+        elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div', 'special dividend']:
             dividends.append({
                 'date': date,
                 'description': symbol_description,
