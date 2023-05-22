@@ -185,6 +185,12 @@ def collect_bens_direitos(children, date_filter, quotes_by_date=None, is_us=Fals
                     if split.value < 0 and split.transaction.post_date >= minimum_date:
                         is_transfer = split.quantity == 0
                         if is_transfer:
+                            has_no_quantity = split.quantity == 0
+                            if has_no_quantity:
+                                print(f'transaction of {account.name} on date {transaction_date} is already at quantity 0, skipping')
+
+                                continue
+
                             value_purchases += Decimal(split.value)
                             price_avg = value_purchases/quantity_purchases
 
