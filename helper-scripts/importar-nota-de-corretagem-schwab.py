@@ -208,7 +208,8 @@ def process_csv(csv_file):
 
     reader = csv.DictReader(csv_file, delimiter = ',', quotechar='"')
     for row in reader:
-        date = row['Date']
+        date_raw = row['Date']
+        date = date_raw.split(' ')[0]
         if 'end' in date.lower():
             break
 
@@ -241,7 +242,7 @@ def process_csv(csv_file):
                 'description': description,
                 'value': amount
             })
-        elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div', 'special dividend']:
+        elif action.lower() in ['cash dividend', 'qualified dividend', 'nra tax adj', 'non-qualified div', 'pr yr nra tax', 'pr yr non-qual div', 'special dividend', 'cash in lieu', 'special qual div']:
             dividends.append({
                 'date': date,
                 'description': symbol_description,
@@ -280,7 +281,7 @@ def process_csv(csv_file):
                 'description': description,
                 'value': amount
             })
-        elif action.lower() in ['unissued rights redemption', 'security transfer']:
+        elif action.lower() in ['unissued rights redemption', 'security transfer', 'reverse split', 'mandatory reorg exc', 'stock div dist']:
             print('Warning: {} found. You should manually import it'.format(action))
             pp.pprint(row)
         elif date.lower() == 'transactions total':
@@ -301,9 +302,6 @@ def main():
     gnucash_db_path = sys.argv[2]
     only_check_csv = len(sys.argv) > 3
     with open(file_path,  newline='') as csv_file:
-        # skip first line
-        next(csv_file)
-
         csv_content = process_csv(csv_file)
         if only_check_csv:
             pprint.pprint(csv_content)
