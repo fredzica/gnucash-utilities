@@ -17,6 +17,7 @@ US_DIVIDEND_TAX_MULTIPLIER = Decimal(0.30)
 TAX_EXEMPT_SALE_FOREIGN_LIMIT = 35000
 TAX_EXEMPT_SALE_DOMESTIC_LIMIT = 20000
 
+# 25/05/2024 - bug: quando há um reverse split (agrupamento), o script diminui o valor total de aquisição. O valor total de aquisição deveria se manter constante, pois nenhuma ação foi vendida nesse caso.
 
 def extract_metadata(account):
     try:
@@ -272,11 +273,11 @@ def collect_bens_direitos(children, date_filter, quotes_by_date=None, is_us=Fals
     return bens, sales, held_during_filtered_period
 
 
-def collect_crypto(book, date_filter):
+def collect_crypto(book, date_filter, minimum_date):
     cryptos_account = book.accounts(name='Crypto')
     children = cryptos_account.children
 
-    crypto, _, _ = collect_bens_direitos(children, date_filter)
+    crypto, _, _ = collect_bens_direitos(children, date_filter, minimum_date=minimum_date)
     return crypto
 
 
@@ -513,7 +514,7 @@ def main():
         print("Situação R$:", round(brokerage_brl_value, 2))
         print("***")
 
-        cryptos = collect_crypto(book, maximum_date_filter)
+        cryptos = collect_crypto(book, maximum_date_filter, minimum_date_filter)
         for crypto in cryptos:
             metadata = crypto['metadata']
 
