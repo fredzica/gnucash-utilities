@@ -18,6 +18,7 @@ TAX_EXEMPT_SALE_FOREIGN_LIMIT = 35000
 TAX_EXEMPT_SALE_DOMESTIC_LIMIT = 20000
 
 # 25/05/2024 - bug: quando há um reverse split (agrupamento), o script diminui o valor total de aquisição. O valor total de aquisição deveria se manter constante, pois nenhuma ação foi vendida nesse caso.
+# Exemplo: IRS - o valor total de aquisição em dólares parece correto, mas o calculado em reais diminui
 
 def extract_metadata(account):
     try:
