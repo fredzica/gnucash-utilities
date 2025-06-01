@@ -154,6 +154,9 @@ def write_to_gnucash(gnucash_db_path, contents):
                 )
                 book.flush()
 
+            if dividend['value'] == None:
+                raise Exception(f'Warning: {dividend["description"]} has no value')
+
             value = Decimal(dividend['value'])
             date_split = dividend['date'].split(' ')
             date = datetime.strptime(date_split[0], "%m/%d/%Y")
@@ -249,11 +252,18 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'value': amount
             })
-        elif 'visa purchase' == action.lower():
+        elif action.lower() in ['visa purchase', 'moneylink transfer', 'atm withdrawal']:
             purchases.append({
                 'date': date,
                 'description': description,
                 'value': amount
+            })
+        elif 'schwab atm rebate' == action.lower():
+            purchases.append({
+                'date': date,
+                'description': description,
+                'symbol': symbol,
+                'value': -amount
             })
         elif 'adr mgmt fee' == action.lower():
             adr_fees.append({
@@ -281,7 +291,13 @@ def process_csv(csv_file):
                 'description': description,
                 'value': amount
             })
-        elif action.lower() in ['unissued rights redemption', 'security transfer', 'reverse split', 'mandatory reorg exc', 'stock div dist']:
+        # elif 'moneylink transfer' == action.lower():
+        #     purchases.append({
+        #         'date': date,
+        #         'description': description,
+        #         'value': amount
+        #     })
+        elif action.lower() in ['unissued rights redemption', 'security transfer', 'reverse split', 'mandatory reorg exc', 'stock div dist', 'stock merger']:
             print('Warning: {} found. You should manually import it'.format(action))
             pp.pprint(row)
         elif date.lower() == 'transactions total':

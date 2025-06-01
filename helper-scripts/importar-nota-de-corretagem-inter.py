@@ -32,7 +32,8 @@ def write_to_gnucash(brokerage_statements):
                 try:
                     stock_commodity = book.commodities(mnemonic=stock_name_with_suffix)
                 except KeyError:
-                    stock_commodity = Commodity(mnemonic=stock_name_with_suffix,
+                    stock_commodity = Commodity(
+                        mnemonic=stock_name_with_suffix,
                         fullname=stock_name_with_suffix,
                         fraction=1,
                         namespace='BVMF',
@@ -53,7 +54,8 @@ def write_to_gnucash(brokerage_statements):
                     else:
                         raise Exception("Invalid input. Should be 1 or 2")
 
-                    stock_account = Account(name=stock_name,
+                    stock_account = Account(
+                        name=stock_name,
                         type="STOCK",
                         parent=parent_account,
                         commodity=stock_commodity,

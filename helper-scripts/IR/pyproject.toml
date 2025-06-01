@@ -5,9 +5,9 @@ description = ""
 authors = ["Frederico Zica <fredzica@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
-PyYAML = "^5.4.1"
-piecash = "^1.1.7"
+python = "^3.9"
+PyYAML = "^6.0.1"
+piecash = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 
