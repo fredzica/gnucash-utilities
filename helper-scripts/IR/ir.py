@@ -28,6 +28,7 @@ TAX_EXEMPT_SALE_DOMESTIC_LIMIT = 20000
 # - pedir para o chatgpt refatorar o código para ter mais funções. Criar saídas de IR de 2023, 2024, 2025, salvá-las e fazer o diff com a versão nova que ele sugerir
 # - saldo de conta da corretora no exterior está ligeiramente diferente do saldo no relatório deles. O que está errado?
 # - rendimentos de FIIs são reportados com uma linha para cada FII, com o CNPJ de cada um deles (baixa prioridade, pois o mais importante são os informes de rendimentos)
+# FIXME: conferir se em agosto vendi mais de 20k e paguei impostos
 
 def extract_metadata(account):
     try:
@@ -311,35 +312,20 @@ def collect_bens_direitos_stocks(book, quotes_by_date, date_filter, minimum_date
     return collect_bens_direitos(children, date_filter, is_us=True, quotes_by_date=quotes_by_date, minimum_date=minimum_date)
 
 
-def get_closest_available_quote(upper_limit_day, month, year, quotes_by_date):
+def get_closest_available_quote(upper_limit_day, month, year, quotes_by_date, bid_or_ask):
     day = upper_limit_day
     while day > 0:
         try:
             date = "{:>02}{:>02}{}".format(day, month, year)
-            return quotes_by_date[date]['bid']
+            return quotes_by_date[date][bid_or_ask]
         except KeyError:
             day -= 1
 
     raise Exception("Unexpected state: quote not found", day, month, year)
 
 
-def get_us_dividend_usdbrl_quotes(quotes_by_date, year):
-    quotes_by_month = {}
-    for month in range(1, 13):
-        # retrieves the last available usdbrl quote from the first half of the previous month
-        found_year = year
-        previous_month = month - 1
-        if month == 1:
-            found_year = year - 1
-            previous_month =  12
-
-        quotes_by_month[month] = get_closest_available_quote(15, previous_month, found_year, quotes_by_date)
-
-    return quotes_by_month
-
-
 def get_year_last_usdbrl_bid_quote(quotes_by_date, year):
-    return get_closest_available_quote(31, 12, year, quotes_by_date)
+    return get_closest_available_quote(31, 12, year, quotes_by_date, 'bid')
 
 
 def collect_brokerage_account_balance(book, maximum_date, quotes_by_date, year_filter):
@@ -407,34 +393,69 @@ def collect_proventos_fiis(book, minimum_date, maximum_date):
     return proventos
 
 
-def collect_us_dividends(book, minimum_date, maximum_date, bid_quotes_by_month):
-    monthly_dividends = {}
+def collect_us_dividends(book, minimum_date, maximum_date, quotes_by_date):
+    # Fonte: https://youtu.be/lNTl9nkOUSQ?t=741
+    # Fonte: PDF da XP e mycapital
+    # Juros e dividendos recebidos → Ptax de venda na data do recebimento.
+    # Imposto de Renda pago no exterior → Ptax de compra na data do pagamento do imposto.
+
+    stock_dividends = {}
     for dividend_account in book.accounts(name='US Dividends').children:
         for split in dividend_account.splits:
+            # if it's within the range we want
             if split.transaction.post_date >= minimum_date and split.transaction.post_date <= maximum_date:
-                month = split.transaction.post_date.month
+                stock_name = dividend_account.name
 
-                if month not in monthly_dividends:
-                    monthly_dividends[month] = Decimal(0)
+                if stock_name not in stock_dividends:
+                    stock_dividends[stock_name] = {}
+                    stock_dividends[stock_name]['usd_value'] = Decimal(0)
+                    stock_dividends[stock_name]['brl_value'] = Decimal(0)
+                    stock_dividends[stock_name]['usd_tax_value'] = Decimal(0)
+                    stock_dividends[stock_name]['brl_tax_value'] = Decimal(0)
 
-                monthly_dividends[month] += -split.value
+                # sum all dividends and taxes per year for each stock
+                date = split.transaction.post_date
+                if split.value > 0:
+                    # it's a tax payment
+                    stock_dividends[stock_name]['usd_tax_value'] += split.value
 
-    all_values = {}
-    paid_tax_brl = Decimal(0)
-    for month in sorted(monthly_dividends.keys()):
-        usd_net_value = monthly_dividends[month]
-        usd_gross_value = usd_net_value/Decimal(1 - US_DIVIDEND_TAX_MULTIPLIER)
-        brl_gross_value = bid_quotes_by_month[month] * usd_gross_value
+                    ask_quote = get_closest_available_quote(date.day, date.month, date.year, quotes_by_date, 'ask')
+                    stock_dividends[stock_name]['brl_tax_value'] += split.value * ask_quote
+                elif split.value < 0:
+                    # it's a dividend payment
+                    stock_dividends[stock_name]['usd_value'] += -split.value
 
-        all_values[month] = {
-            'usd_net_value': usd_net_value,
-            'usd_gross_value': usd_gross_value,
-            'brl_gross_value': brl_gross_value
+                    bid_quote = get_closest_available_quote(date.day, date.month, date.year, quotes_by_date, 'bid')
+                    stock_dividends[stock_name]['brl_value'] += -split.value * bid_quote
+                else:
+                    raise Exception("Unexpected state: US dividend split value is 0", split.value)
+
+
+    us_dividend_per_stock = {}
+    for stock_name in sorted(stock_dividends.keys()):
+        usd_value = stock_dividends[stock_name]['usd_value']
+        brl_value = stock_dividends[stock_name]['brl_value']
+        usd_tax_value = stock_dividends[stock_name]['usd_tax_value']
+        brl_tax_value = stock_dividends[stock_name]['brl_tax_value']
+
+        # Tax value tends to be embedded in the dividend payment for ADRs. There is no separate transaction for it.
+        # That means it's 0 for those cases, so I need to calculate it from the received value.
+        # I'm not sure it's always 30%, but I have no other choice for now than just guessing because i don't want to pay more taxes :(.
+        # the correct thing would be to know how much was paid in taxes and apply the correct tax rate and correct exchange rate at the time of the payment
+        if usd_tax_value == 0:
+            usd_tax_value = usd_value * US_DIVIDEND_TAX_MULTIPLIER
+        if brl_tax_value == 0:
+            brl_tax_value = brl_value * US_DIVIDEND_TAX_MULTIPLIER
+
+        # let's keep everything available for debugging purposes
+        us_dividend_per_stock[stock_name] = {
+            'usd_net_value': usd_value,
+            'brl_net_value': brl_value,
+            'usd_tax_value': usd_tax_value,
+            'brl_tax_value': brl_tax_value
         }
 
-        paid_tax_brl += brl_gross_value * US_DIVIDEND_TAX_MULTIPLIER
-
-    return paid_tax_brl, all_values
+    return us_dividend_per_stock
 
 
 def collect_bonificacoes(book, minimum_date, maximum_date):
@@ -502,6 +523,7 @@ def main():
                 pp.pprint(bem_direito)
 
         stocks, stock_sales, _ = collect_bens_direitos_stocks(book, quotes_by_date, maximum_date_filter, minimum_date_filter)
+        us_dividend_per_stock = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, quotes_by_date)
 
         types = {'us etf': 'ETF', 'us stock': 'Ação', 'reit': 'REIT'}
         for stock in sorted(stocks, key=lambda x: (x['metadata']['grupo_bem_direito'], x['metadata']['codigo_bem_direito'], x['name'])):
@@ -515,10 +537,15 @@ def main():
             print("Localização: EUA")
             print("Discriminação: {} {} {}. Código de negociação {}. Valor total de aquisição US$ {}. Corretora Charles Schwab.".format(round(stock['quantity'], 0), type_description, metadata['long_name'], stock['name'], round(stock['value'], 2)))
             print("Situação R$:", round(stock['brl_value'], 2))
+            if stock['name'] in us_dividend_per_stock:
+                print("Aplicação Financeira - Lucro ou prejuízo R$:", round(us_dividend_per_stock[stock['name']]['brl_net_value'], 2))
+                print("Aplicação Financeira - Imposto pago no exterior R$:", round(us_dividend_per_stock[stock['name']]['brl_tax_value'], 2))
             print("***")
 
             if is_debug:
                 pp.pprint(stock)
+                pp.pprint(stock_sales)
+                pp.pprint(us_dividend_per_stock)
 
         brokerage_usd_value, brokerage_brl_value = collect_brokerage_account_balance(book, maximum_date_filter, quotes_by_date, year_filter)
         print("Conta na corretora no exterior")
@@ -559,10 +586,10 @@ def main():
         print("A ser declarado em Rendimentos Isentos e Não tributáveis")
 
         acoes_aggregated_profit = sales_info['aggregated']['acoes']['aggregated_profits']
-        us_aggregated_profits = sales_info['aggregated']['us']['aggregated_profits']
         acoes_dedo_duro = sales_info['aggregated']['acoes']['dedo_duro']
         print("20 - Ganhos líquidos em operações no mercado à vista de ações: ", round(acoes_aggregated_profit, 2))
-        print("5 - Ganho de capital na alienação de bem, direito ou conjunto de bens ou direitos da mesma natureza, alienados em um mesmo mês, de valor total de alienação até R$ 20.000,00, para ações alienadas no mercado de balcão, e R$ 35.000,00, nos demais casos (Lucro com venda no exterior) (Declarar apenas se for valor positivo): ", round(us_aggregated_profits, 2))
+        # FIXME: remove parts of the code that calculate this. it's not needed anymore
+        #  print("5 - Ganho de capital na alienação de bem, direito ou conjunto de bens ou direitos da mesma natureza, alienados em um mesmo mês, de valor total de alienação até R$ 20.000,00, para ações alienadas no mercado de balcão, e R$ 35.000,00, nos demais casos (Lucro com venda no exterior) (Declarar apenas se for valor positivo): ", round(us_aggregated_profits, 2))
         print("Imposto Pago/Retido (Imposto Pago/Retido na linha 03) (dedo-duro): ", round(acoes_dedo_duro, 2))
 
         print("**************************")
@@ -605,16 +632,17 @@ def main():
                 print("    Valor do imposto", round(imposto, 2))
 
         print("***")
-        print("Vendas no exterior que geraram impostos")
-        for key in sales_info['monthly']['us'].keys():
-            current = sales_info['monthly']['us'][key]
-            resultado = current['aggregated_profits']
-            imposto = current['imposto']
+        # FIXME: remove parts of the code that calculate this. it's not needed anymore
+        # print("Vendas no exterior que geraram impostos")
+        # for key in sales_info['monthly']['us'].keys():
+        #     current = sales_info['monthly']['us'][key]
+        #     resultado = current['aggregated_profits']
+        #     imposto = current['imposto']
 
-            if resultado != 0:
-                print("Mês:", key)
-                print("    Resultado", round(resultado, 2))
-                print("    Valor do imposto", round(imposto, 2))
+        #     if resultado != 0:
+        #         print("Mês:", key)
+        #         print("    Resultado", round(resultado, 2))
+        #         print("    Valor do imposto", round(imposto, 2))
 
         print("**************************")
 
@@ -648,25 +676,7 @@ def main():
 
         if is_debug:
             pp.pprint(proventos)
-        print("******")
 
-        print("Dividendos no exterior")
-        bid_quotes_by_month = get_us_dividend_usdbrl_quotes(quotes_by_date, int(year_filter))
-        paid_tax, us_dividends = collect_us_dividends(book, minimum_date_filter, maximum_date_filter, bid_quotes_by_month)
-
-        print("Imposto Pago/Retido - Declarar na linha 02 (Imposto pago no exterior pelo titular e pelos dependentes):", round(paid_tax, 2))
-        print("***")
-
-        for key in us_dividends:
-            dividend = us_dividends[key]
-            print("Mês", key)
-            print("Valor em R$:", round(dividend['brl_gross_value'], 2))
-            print("***")
-
-        if is_debug:
-            pp.pprint(bid_quotes_by_month)
-            pp.pprint(paid_tax)
-            pp.pprint(us_dividends)
         print("******")
         print("Rendimentos de FIIs")
         proventos_fiis = collect_proventos_fiis(book, minimum_date_filter, maximum_date_filter)
