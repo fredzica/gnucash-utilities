@@ -20,6 +20,15 @@ TAX_EXEMPT_SALE_DOMESTIC_LIMIT = 20000
 # 25/05/2024 - bug: quando há um reverse split (agrupamento), o script diminui o valor total de aquisição. O valor total de aquisição deveria se manter constante, pois nenhuma ação foi vendida nesse caso.
 # Exemplo: IRS - o valor total de aquisição em dólares parece correto, mas o calculado em reais diminui
 
+# 04/06/2025 - 
+# coisas para resolver:
+# - reportar dividendos de ações no exterior separadamente para cada uma delas
+#   - qual valor de dólar usar? ainda tem aquela loucura de dólar do dia 15?
+# - bens e direitos de acoes no exterior estão ok?
+# - pedir para o chatgpt refatorar o código para ter mais funções. Criar saídas de IR de 2023, 2024, 2025, salvá-las e fazer o diff com a versão nova que ele sugerir
+# - saldo de conta da corretora no exterior está ligeiramente diferente do saldo no relatório deles. O que está errado?
+# - rendimentos de FIIs são reportados com uma linha para cada FII, com o CNPJ de cada um deles (baixa prioridade, pois o mais importante são os informes de rendimentos)
+
 def extract_metadata(account):
     try:
         metadata = json.loads(account.description)
@@ -175,18 +184,22 @@ def collect_bens_direitos(children, date_filter, quotes_by_date=None, is_us=Fals
                 format = "%d%m%Y"
                 date = split.transaction.post_date.strftime(format)
                 if split.value > 0 or is_stock_split:
+                    # it's a purchase or a stock split
                     value_purchases += Decimal(split.value)
                     quantity_purchases += Decimal(split.quantity)
                     price_avg = value_purchases/quantity_purchases
 
                     if is_us and quotes_by_date is not None:
-                        day_ask_usdbrl = quotes_by_date[date]['ask']
-                        brl_value_purchases += day_ask_usdbrl * Decimal(split.value)
+                        day_bid_usdbrl = quotes_by_date[date]['bid']
+                        brl_value_purchases += day_bid_usdbrl * Decimal(split.value)
                         brl_price_avg = brl_value_purchases/quantity_purchases
                 elif minimum_date is not None:
                     if split.value < 0 and split.transaction.post_date >= minimum_date:
+                    # it's a sale or a transfer (?) in the current date filter range
                         is_transfer = split.quantity == 0
                         if is_transfer:
+                            # I'm supposing a transfer is an asset becoming another one
+                            # FIXME: two ifs doing the same thing?
                             has_no_quantity = split.quantity == 0
                             if has_no_quantity:
                                 print(f'transaction of {account.name} on date {transaction_date} is already at quantity 0, skipping')
@@ -197,10 +210,11 @@ def collect_bens_direitos(children, date_filter, quotes_by_date=None, is_us=Fals
                             price_avg = value_purchases/quantity_purchases
 
                             if is_us and quotes_by_date is not None:
-                                day_bid_usdbrl = quotes_by_date[date]['bid']
-                                brl_value_purchases += Decimal(split.value) * day_bid_usdbrl
+                                day_ask_usdbrl = quotes_by_date[date]['ask']
+                                brl_value_purchases += Decimal(split.value) * day_ask_usdbrl
                                 brl_price_avg = brl_value_purchases/quantity_purchases
                         else:
+                            # it's a sale
                             sold_price = split.value/split.quantity
                             positive_quantity = -split.quantity
                             is_profit = sold_price > price_avg
