@@ -252,7 +252,7 @@ def process_csv(csv_file):
                 'symbol': symbol,
                 'value': amount
             })
-        elif action.lower() in ['visa purchase', 'moneylink transfer', 'atm withdrawal']:
+        elif action.lower() in ['visa credit', 'visa purchase', 'moneylink transfer', 'atm withdrawal']:
             purchases.append({
                 'date': date,
                 'description': description,

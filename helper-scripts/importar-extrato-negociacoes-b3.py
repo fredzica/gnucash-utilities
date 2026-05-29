@@ -47,6 +47,7 @@ def get_or_create_stock_account(book, ticker):
             commodity=stock_commodity,
             placeholder=False,
         )
+        book.flush()
 
     return stock_account
 
